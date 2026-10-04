@@ -13,6 +13,8 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 
 ## 状态
 
+对照 7 条成功定义：
+
 | # | 成功定义 | 状态 |
 |---|---|---|
 | 1 | 从 UFS / NVMe 引导进入 SteamOS Game Mode | ✅ 已验证（板载 UFS） |
@@ -23,8 +25,58 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 | 6 | 外接手柄被识别为 Steam 输入设备 | ⚠️ USB ✅（有「开机前插→无输入」坑）；BT 未测 |
 | 7 | 从整盘镜像可复现部署 | ✅ 已验证 |
 
-**已知限制**：3.5mm 音频暂不可用；桌面模式切换未验证；蓝牙手柄未实测。
-详细进度见仓库提交历史。
+## 已实现
+
+### 内核与设备树
+- 基于 `radxa/kernel`（`7.0.11+`，`SMP PREEMPT`）交叉编译 **EFI zboot 内核** + 3397 个模块 + Q8B 设备树。
+- 内核配置**逐项对齐 Valve Steam Frame 内核**（从 Frame 内核内嵌的 IKCONFIG 提取出完整 config 做权威 diff），补齐 `PREEMPT`、`OVERLAY_FS`、`SCHED_CLASS_EXT`、`DEBUG_INFO_BTF`、`HID_PID`、`USB_HIDDEV`、`PM_WAKELOCKS`、`NO_HZ_IDLE`、`CPU_FREQ_DEFAULT_GOV_PERFORMANCE` 等。
+- **4 个内核补丁**（`config/patches/`，构建时幂等打入只读上游树）：
+  1. `tc956x` 网桥 `irq_domain` 结构体初始化 —— 修板载 2.5GbE 的 SP/PC alignment oops；
+  2. `brcmfmac` 新增 **SYN43756 / AP6276P** Wi-Fi 模组支持 —— 主线无此芯片；
+  3. Q8B 蓝牙 `serdev` 设备树节点；
+  4. `brcmfmac` D3 子状态握手超时容错。
+
+### 运行时固件
+- 补齐内核从 `/lib/firmware` 加载的**全部运行时固件**（路径以设备树 `firmware-name` 与驱动 catalog 为权威）：Adreno 690 复用的 `a660` GMU/SQE、GPU zap shader、ADSP/CDSP/SLPI/VSS/QUPv3、Iris VPU、Wi-Fi/BT 固件、ALSA 音频拓扑。来源与许可见 [`firmware/WHENCE`](firmware/WHENCE)。
+
+### 存储与引导
+- **从板载 UFS 引导**（Samsung 128G UFS，需 **4096 字节扇区**镜像）；microSD / NVMe（**512 字节扇区**）同样支持。
+- 整盘镜像打包（GPT：`config` + ESP + `rootfs`），ESP 上放内核 + DTB + systemd-boot BLS 条目。
+- **首启自动把根分区扩展到整盘**（`steamos-growroot.service`，best-effort、幂等）。
+
+### 图形
+- **Adreno 690 由 stock Mesa 原生支持**：Turnip（`libvulkan_freedreno`）与 zink 均枚举出 `Adreno (TM) 690`，**无需自建 Mesa**。
+- Game Mode（gamescope + Steam Gamepad UI）出画；HDMI 与双 USB-C DP 均可用，双 DP 即插即有。
+
+### 音频
+- 自写 **ALSA UCM**（Q8B profile，3 份）+ **AudioReach 拓扑**，修掉 stock UCM 只认 X13s 导致的全程无声。
+- HDMI/DP 输出可用，**默认 sink 随插屏口自动切换**（三个 DP 设备各绑定 `JackControl`）。
+- 3.5mm 耳机 / 麦克风未通（WCD938x EIO，ADSP 拒 `GRAPH_START`）。
+
+### 网络
+- **有线**：双 2.5GbE（Toshiba TC956x PCIe 桥 + QCA8081 PHY），补丁后两口驱动均绑定。
+- **Wi-Fi**：**Synaptics SYN43756B0（AMPAK AP6276P）**——主线与厂商 BSP 均零支持；自写内核补丁 + 真实固件后 `brcmfmac` 绑定、`wlan0` 起、双频段枚举、**重启自加载**。
+- **蓝牙**：UART patchram；共享模组的 BT 核冷启动未就绪时 bluetoothd 首开即失败且不重试，用 `q8b-bt-bringup.service` 自愈 —— 冷启动约 36s 自动起、可扫描发现设备。
+
+### 系统与会话
+- **去 Frame 化 overlay**：把 SteamOS 的 A/B partsets `fstab` 换成扁平单槽布局、`VARIANT_ID` 改为 `steamdeck`、屏蔽 26 个系统级 + 5 个用户级 Frame 专有 unit（FPGA / 风扇 / LED / VR / typec / ADB 等）。
+- 定制 **initramfs**（SteamOS 必需：须在 `switch_root` 前挂好 `/etc` overlay）。
+- **DRM 热插拔看门狗**：无显示器启动 Game Mode 后插屏可自愈（稳定 8s 后重启一次 Steam 会话）。
+- 恢复系统原生睡眠（s2idle；本板唯一可靠唤醒源为 PMIC 电源键）。
+
+### 构建与交付
+- 一条龙构建：内核 → 模块 → 固件 → initramfs → SteamOS rootfs → 可刷写镜像。
+- **fork 后跑 GitHub Actions 即可云端出镜像**，无需本地环境。
+- 上游（`radxa/kernel`、rootfs 提取器等）按 `upstream.lock` 钉死 commit / sha256，**构建可复现**。
+- 自检 `make verify`：布局 / 构建接线 / 产物自省 / 路径契约。
+
+## 已知限制
+
+- **3.5mm 音频**暂不可用（WCD938x EIO，卡 ADSP 固件）。
+- **Desktop Mode（KDE Plasma）切换**未实测。
+- **蓝牙手柄**未实测；USB 手柄存在「开机前已插 → 无输入」的坑（重插或复位可解）。
+- 板上**无输入设备**时，Game Mode 只能显示、无法操作。
+- 冷启动后约 1 分钟音频才就绪；`default-sink-volume` 设置未生效。
 
 ## 硬件要求
 
