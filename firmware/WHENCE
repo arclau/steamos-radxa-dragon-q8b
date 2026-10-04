@@ -1,0 +1,33 @@
+# firmware/WHENCE — 运行时固件来源与许可
+
+本目录是**构建输入**：内核从 `/lib/firmware` 加载的运行时 blob。路径**以板级 DT 的
+`firmware-name` 为唯一权威**（另加驱动 catalog 里的固定名），不按芯片名想当然命名。
+
+> **许可重要说明**：本仓库的 GPL-2.0（见根 `LICENSE`）**不覆盖**本目录下的固件二进制。
+> 它们各自按其原始许可分发，仅用于在目标硬件上运行内核所需。若再分发本仓库，请一并保留本文件。
+
+## 各文件来源
+
+| 文件 | 用途 | 来源 | 备注 |
+|---|---|---|---|
+| `qcom/a660_gmu.bin` | Adreno 690 GMU | upstream **linux-firmware** | a690 复用 a660（非 a690_*） |
+| `qcom/a660_sqe.fw` | Adreno 690 SQE | upstream **linux-firmware** | 同上 |
+| `qcom/sc8280xp/LENOVO/21BX/qcdxkmsuc8280.mbn` | GPU zap shader | upstream **linux-firmware** | X13s 路径（SoC 未 fuse） |
+| `qcom/vpu/vpu20_p4_gen2_s6.mbn` | Iris VPU | upstream **linux-firmware** | |
+| `qcom/sc8280xp/qccdsp8280.mbn` | CDSP / NSP0 | **radxa-pkg/radxa-firmware** | Radxa 版，非 upstream |
+| `qcom/sc8280xp/qcslpi8280.mbn` | SLPI | **radxa-pkg/radxa-firmware** | |
+| `qcom/sc8280xp/qcvss8280.mbn` | VSS | **radxa-pkg/radxa-firmware** | |
+| `qcom/sc8280xp/qupv3fw.elf` | QUPv3（qup0/1/2） | **radxa-pkg/radxa-firmware** | upstream 没有 |
+| `qcom/sc8280xp/radxa/dragon-q8b/qcadsp8280.mbn` | ADSP | **radxa-pkg/radxa-firmware** | Radxa 板级调优版 |
+| `qcom/sc8280xp/SC8280XP-Radxa-Dragon-Q8B-tplg.bin` | ALSA 音频拓扑 | **本地构建**：`ref/audioreach-topology/SC8280XP-Radxa-Dragon-Q8B.m4` 经 `m4` + `alsatplg` 生成 | 拓扑源在 `ref/`，不进 git |
+| `brcm/brcmfmac43756-pcie.bin` / `.clm_blob` / `.txt` | Wi-Fi SYN43756B0（AP6276P） | **AMPAK AP6276P vendor 包**（`ref/ap6276p/`） | 改名自 vendor 原文件 |
+| `brcm/BCM.hcd` / `brcm/SYN43756B0.hcd` | BT patchram | 同上 | 驱动只认兜底名 `brcm/BCM.hcd` |
+
+- **vendor 固件来源**：`https://github.com/radxa-pkg/radxa-firmware`
+  （`radxa-firmware-sc8280xp/lib/firmware/qcom/sc8280xp/`）。
+- **Wi-Fi/BT 固件**：AP6276P 模组 vendor 包（本地只读副本 `ref/ap6276p/`，不进 git）。
+
+## 重新获取
+
+本目录当前直接随仓库分发（构建输入）。若判定某 blob 不可再分发，可将其移出仓库、
+改为构建时从上述来源拉取（在 `scripts/` 增加一个 fetch 脚本并在 `upstream.lock` 记录校验值）。

@@ -1,0 +1,118 @@
+name: build
+
+# 云端构建 SteamOS-on-Q8B 可刷写镜像。
+# 触发：手动（选目标介质）或打 tag（v*）。
+#
+# 说明：
+#   - 全部上游按 upstream.lock 现场重建，不需要任何 secret。
+#   - SteamOS rootfs 从 Valve CDN 下载并校验，不随仓库分发。
+#   - 成品 14–16GB，zstd 压缩后分卷（<2GiB/卷）上传 artifact；打 tag 时附到 Release。
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "目标介质（ufs=4096B 扇区；tf/nvme=512B）"
+        type: choice
+        options: [ufs, tf, nvme]
+        default: ufs
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      TARGET: ${{ github.event.inputs.target || 'ufs' }}
+      LIBGUESTFS_BACKEND: direct
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 磁盘情况（根盘仅 ~14G，下面会把 build/ 挪到大盘）
+        run: df -h /
+
+      - name: 大容量工作区（/mnt，避免根盘爆）
+        run: |
+          set -euo pipefail
+          if mountpoint -q /mnt && [ "$(df --output=avail -BG /mnt | tail -1 | tr -dc 0-9)" -ge 40 ]; then
+            mkdir -p /mnt/q8b-build
+            ln -sfn /mnt/q8b-build build
+            echo "build/ -> /mnt/q8b-build"
+          else
+            echo "警告：/mnt 不可用或过小，将在根盘构建（可能 ENOSPC）"
+          fi
+          df -h / /mnt 2>/dev/null || true
+
+      - name: 安装依赖
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc flex bison libssl-dev libelf-dev dwarves \
+            gcc-aarch64-linux-gnu \
+            libguestfs-tools qemu-utils squashfs-tools \
+            rsync zstd xz-utils cpio file \
+            python3-requests
+          python3 -c 'import zstandard' 2>/dev/null \
+            || python3 -m pip install --user --break-system-packages zstandard
+
+      - name: 启用 KVM（guestfish 打包需要）
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          ls -l /dev/kvm || echo "警告：无 /dev/kvm，guestfish 将走 TCG（很慢）"
+
+      - name: guestfish 冒烟测试（尽早暴露打包环境问题）
+        run: |
+          sudo guestfish -a /dev/null run \
+            && echo "guestfish OK" \
+            || echo "警告：guestfish 自检失败，打包阶段可能出错"
+
+      - name: 构建（内核 → 模块 → 固件 → initramfs → rootfs → 镜像）
+        run: scripts/build-all.sh
+
+      - name: 压缩分卷（<2GiB/卷）
+        run: |
+          set -euo pipefail
+          IMG="$(ls build/out/radxa-dragon-q8b_*.img | head -1)"
+          echo "IMG=$IMG" >> "$GITHUB_ENV"
+          echo "构建产物：$IMG（$(stat -c%s "$IMG") 字节）"
+          zstd -19 -T0 -f "$IMG" -o "$IMG.zst"
+          PARTS=/mnt/q8b-parts
+          mkdir -p "$PARTS"
+          split -b 1900M -d -a 2 "$IMG.zst" "$PARTS/$(basename "$IMG").zst.part"
+          (cd "$PARTS" && sha256sum ./* > SHA256SUMS)
+          echo "PARTS=$PARTS" >> "$GITHUB_ENV"
+          ls -lh "$PARTS"
+
+      - name: 上传 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ env.TARGET }}
+          path: ${{ env.PARTS }}/*
+          retention-days: 14
+          compression-level: 0
+
+      - name: 附到 Release（仅 tag）
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" "$PARTS"/* --clobber

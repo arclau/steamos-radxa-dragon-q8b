@@ -1,0 +1,33 @@
+# upstream.lock — 所有上游输入的钉死清单（只读；本项目绝不回 PR 上游）
+#
+# 格式：可被 bash `source`。改这里 = 改构建基线，需与 README 的版本说明同步。
+# 用途：scripts/fetch-upstreams.sh 按此重建 upstream/；scripts/fetch-valve-rootfs.sh
+#       按此拉取并校验 Valve 底包。CI 与本地走同一份锁，保证可复现。
+
+# ── 内核（构建必需）────────────────────────────────────────────────────────
+# 本板 DT / 内核源码。只读浅克隆到 upstream/radxa-kernel。
+RADXA_KERNEL_URL="https://github.com/radxa/kernel"
+RADXA_KERNEL_BRANCH="linux-7.0.11"
+RADXA_KERNEL_COMMIT="a50eb5b71984bd82b49cd5d31b1e2eb5505c6512"
+
+# ── SteamOS 提取器（来自移植基线 hashtagbasit/SteamOS-ARM-Handhelds）─────────
+# 我们已把该文件 vendor 进 steamos/tools/extract_rootfs.py（GPL-2.0）。
+# 这里只作为完整性锚点：fetch-upstreams.sh 校验 vendor 副本的 sha256 与上游一致。
+HASHTAGB_PY_URL="https://raw.githubusercontent.com/hashtagbasit/SteamOS-ARM-Handhelds/main/scripts/extract_rootfs.py"
+HASHTAGB_PY_SHA256="f6e5840a6d14b08b026e20442ab4597af1d780bb779fea91cdd8c11fe2ffb378"
+
+# ── Valve 官方 SteamOS ARM 底包（Steam Frame / Deckard）────────────────────
+# userspace rootfs，由 Valve CDN 分发；我们只下载+重组，不再分发（见 README 许可节）。
+STEAMOS_BUILD="20260925.6175226"
+STEAMOS_BUNDLE="deckard-20260925.6175226-0.5.0"
+STEAMOS_BASE_URL="https://steamdeck-images.steamos.cloud/vr/${STEAMOS_BUILD}"
+STEAMOS_RAUCB_SHA256="65991fff2d57580ec315d2713eb59dc217520115a3596d44a2b06b994c413a43"
+STEAMOS_ROOTFS_SHA256="aa05cb52a1ad1c2d0c3d4d88f0e738d6808d85fcca3b4cc42cd2bee9578b3ab2"
+STEAMOS_ROOTFS_SIZE="10737418240"
+STEAMOS_FALLBACK_STORE="https://steamdeck-images.steamos.cloud/vr/chunks.castr"
+
+# ── 仅 provenance（不参与构建，fetch-upstreams.sh 不克隆）───────────────────
+# 仓库内 firmware/ 是已 materialize 的构建输入；下列上游只用于追溯来源。
+#   upstream/radxa-firmware        https://github.com/radxa-pkg/radxa-firmware
+#   upstream/radxa-linux-firmware  https://github.com/radxa/linux-firmware
+#   upstream/linux-firmware        https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git

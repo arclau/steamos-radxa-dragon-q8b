@@ -1,0 +1,107 @@
+#!/bin/busybox sh
+#
+# q8b-initramfs init — 挂 root、在 switch_root 前挂 SteamOS 的 /etc overlay、切换根。
+#
+# 来源：改编自 SteamOS-ARM-Handhelds
+#   ref/steamos-arm-handhelds/external-and-mods/kernel-common/initramfs/init
+# 改动：去掉该项目的 ROCKNIX/ABL 专有逻辑（PARTNAME=ROCKNIX 引导分区、mmcblk 扫描、
+#       USB debug gadget、konkr OTA 恢复），改为本板 UEFI/GPT 布局：
+#       按 cmdline 的 root= 解析（UUID= / PARTLABEL=），并保留最关键的
+#       「switch_root 之前挂 /etc overlay」步骤。
+#
+# 为什么必须有这个 initramfs（不是可选）：
+#   SteamOS 把 /etc 做成 overlayfs（lowerdir=/etc, upperdir=/var/lib/overlays/etc/upper）。
+#   若不在 switch_root 前挂好，systemd 会先从**裸 /etc** 读 unit，等它自己的 etc.mount
+#   生效时已晚 —— 设备上启用的服务（sshd 等）开机不会自启。
+#   证据：基线 kernel-common/initramfs/init:148-158 的注释原文。
+#
+/bin/busybox --install -s /bin
+export PATH=/bin
+# busybox mount 默认会更新 /etc/mtab；initramfs 里原本没有 /etc，于是每次 mount 都刷
+# "mount: /etc/mtab: No such file or directory"。建 /etc 并把 mtab 指向 /proc/mounts，
+# busybox 见到该软链即跳过 mtab 更新（真实 rootfs 的 /etc/mtab 也是同款软链）。
+mkdir -p /etc
+ln -sf /proc/mounts /etc/mtab
+mount -t devtmpfs dev /dev
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mkdir -p /newroot
+
+# ── 解析 cmdline：steamos.root= 优先于 root= ──────────────────────────────
+rootarg=""
+for arg in $(cat /proc/cmdline); do
+  case "$arg" in
+    steamos.root=*) rootarg="${arg#steamos.root=}" ;;
+    root=*)         [ -n "$rootarg" ] || rootarg="${arg#root=}" ;;
+  esac
+done
+echo "q8b-initramfs: rootarg='$rootarg'"
+
+# ── 设备解析 ──────────────────────────────────────────────────────────────
+# 按 GPT 分区名（uevent 里的 PARTNAME）找设备。
+by_partlabel() {
+  for u in /sys/class/block/*/uevent; do
+    [ -e "$u" ] || continue
+    if grep -qx "PARTNAME=$1" "$u"; then
+      d="${u%/uevent}"; echo "/dev/${d##*/}"; return 0
+    fi
+  done
+  return 1
+}
+
+# 按文件系统 UUID 找设备（busybox blkid）。优先 -s/-o，退化为解析默认输出。
+by_fsuuid() {
+  want="$1"
+  for d in /dev/*[0-9] /dev/*p[0-9]; do
+    [ -b "$d" ] || continue
+    got="$(blkid -s UUID -o value "$d" 2>/dev/null)"
+    [ -n "$got" ] || got="$(blkid "$d" 2>/dev/null | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')"
+    [ "$got" = "$want" ] && { echo "$d"; return 0; }
+  done
+  return 1
+}
+
+resolve_root() {
+  case "$rootarg" in
+    PARTLABEL=*) by_partlabel "${rootarg#PARTLABEL=}" ;;
+    UUID=*)      by_fsuuid    "${rootarg#UUID=}"      ;;
+    /dev/*)      [ -b "$rootarg" ] && echo "$rootarg" ;;
+    *)           return 1 ;;
+  esac
+}
+
+# UFS/根设备可能要几秒才出现，最多等 30s。
+rootdev=""
+i=0
+while [ "$i" -lt 60 ]; do
+  rootdev="$(resolve_root)" && break
+  i=$((i + 1))
+  sleep 0.5
+done
+[ -n "$rootdev" ] || rootdev="$rootarg"
+
+# ── 挂 root + /etc overlay + switch_root ──────────────────────────────────
+# root 文件系统类型不写死（SteamOS rootfs 是 btrfs，我们打包成 ext4；两者都自动识别）。
+if [ -n "$rootdev" ] && mount -o rw "$rootdev" /newroot; then
+  # /etc overlay 的 upper/work 目录**必须无条件创建**：SteamOS 原始 rootfs 里
+  # /var/lib/overlays/ 根本不存在（是 initrd 运行时建的）。若不建，overlay 挂不上，
+  # systemd 会从裸 /etc 读 unit，设备上启用的服务开机不自启。
+  o=/newroot/var/lib/overlays/etc
+  if ! grep -q " /newroot/etc " /proc/mounts; then
+    mkdir -p "$o/upper" "$o/work"
+    mount -t overlay overlay \
+      -o "lowerdir=/newroot/etc,upperdir=$o/upper,workdir=$o/work" /newroot/etc \
+      || echo "q8b-initramfs: etc overlay failed, leaving it to etc.mount"
+  fi
+  echo "q8b-initramfs: root=$rootdev, switch_root -> /sbin/init"
+  exec switch_root /newroot /sbin/init
+fi
+
+# 失败：尽量留证（挂上就写，挂不上就打印），然后给一个 shell。
+echo "q8b-initramfs: FAILED to mount root (rootarg='$rootarg' rootdev='$rootdev')"
+if [ -d /newroot/var/log ]; then
+  { echo "=== q8b initramfs boot failure ==="; cat /proc/cmdline; \
+    cat /proc/partitions; dmesg; } > /newroot/var/log/q8b-initramfs-fail.log 2>&1
+  sync
+fi
+exec sh

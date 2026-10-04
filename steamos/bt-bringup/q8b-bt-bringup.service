@@ -1,0 +1,20 @@
+[Unit]
+Description=Q8B Bluetooth bring-up (retry hci_uart until the SYN43756 controller is ready)
+# Root cause (observed on hardware): the BT core on the shared
+# Wi-Fi+BT module is not responsive on a cold boot; bluetoothd's first open
+# fails and it never retries, so the controller never registers over MGMT.
+# Run after bluetoothd has made its (failed) first attempt.
+After=bluetooth.service
+Wants=bluetooth.service
+# hci0 only exists once hci_uart has bound to the serdev device.
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/q8b-bt-bringup
+# Best-effort: never fail the boot.
+SuccessExitStatus=0 1
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

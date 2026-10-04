@@ -1,0 +1,19 @@
+diff --git a/arch/arm64/boot/dts/qcom/sc8280xp-radxa-dragon-q8b.dts b/arch/arm64/boot/dts/qcom/sc8280xp-radxa-dragon-q8b.dts
+index c81544e91..b0dc59613 100644
+--- a/arch/arm64/boot/dts/qcom/sc8280xp-radxa-dragon-q8b.dts
++++ b/arch/arm64/boot/dts/qcom/sc8280xp-radxa-dragon-q8b.dts
+@@ -1606,9 +1606,13 @@ &txmacro {
+ 
+ /* E-key Bluetooth */
+ &uart2 {
+-	uart-has-rtscts;
+ 	status = "okay";
+ 
++	bluetooth {
++		compatible = "brcm,bcm43438-bt";
++		max-speed = <3000000>;
++	};
++
+ 	port {
+ 		uart2_ep: endpoint {
+ 			remote-endpoint = <&wlan_uart_ep>;

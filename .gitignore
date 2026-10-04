@@ -1,0 +1,34 @@
+# .gitignore — SteamOS-on-Q8B
+#
+# 原则：只提交「源码 / 构建输入」；产物、缓存、只读参考副本一律不进 git。
+
+# ── 产物与缓存（全部折在 build/ 下：kernel/modules/steamos-rootfs/steamos-bootloader/out/dl）──
+/build/
+
+# ── 嵌在源码树里的中间产物 ──
+/steamos/initramfs/out/
+
+# ── 只读参考副本（vendor / 原厂 SDK / 基线副本只放本地，不进 git）──
+/ref/
+
+# ── 上游克隆（只读输入；由 upstream.lock + scripts/fetch-upstreams.sh 现场重建，绝不进 git）──
+# 每个子目录自带 .git，若入库会被 git 误判为 submodule；且体积巨大（radxa/kernel 为完整内核树）。
+/upstream/
+
+# ── 编辑器 / 系统杂物 ──
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── 补丁 / 合并残留 ──
+*.orig
+*.rej
+*.bak
+
+# ─────────────────────────────────────────────────────────────────────────
+# firmware/  构建输入：Qualcomm 运行时固件 blob（DT 的 firmware-name 要求）
+#            + brcm Wi-Fi/BT 固件（驱动 catalog 要求，含 BT patchram `brcm/BCM.hcd`）。
+#            当前纳入版本库。若判定为专有不可入库，取消下面一行的注释并补 fetch 脚本。
+# /firmware/

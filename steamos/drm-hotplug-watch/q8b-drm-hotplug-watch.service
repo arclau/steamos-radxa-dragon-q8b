@@ -1,0 +1,19 @@
+[Unit]
+Description=Q8B DRM hotplug watch (recover headless Game Mode start after monitor hotplug)
+# Root cause (observed on hardware): a Game Mode session that starts with no
+# connected display stops committing frames, so a later monitor hotplug leaves
+# the DP output black; only `systemctl --user restart steam.service` recovers.
+# Fix (Plan A): a user-level watchdog that arms only when the session started
+# headless and restarts steam.service exactly once when a display appears.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/q8b-drm-hotplug-watch
+# Best-effort, one-shot: never restart the watcher, never fail the session.
+Restart=no
+SuccessExitStatus=0
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,32 @@
+[Unit]
+# steamos-growroot.service — 首次启动把根分区扩到整盘（best-effort，绝不阻断启动）。
+#
+# 背景（真机根因）：
+#   镜像按固定 SIZE 打包；刷到更大的 microSD/NVMe 后，根分区只有镜像那么大，
+#   剩余空间未分区。SteamOS + Steam 客户端 + shader cache 需要 GB 级空间，
+#   根写满会让 Steam 装不完/崩溃 → gamescope 的 --steam 会话从不提交 KMS →
+#   HDMI 只剩 fbcon 光标。故首启即扩根，一劳永逸。
+#
+# 安装：由 steamos/apply-sc8280xp-overlay.sh §10 安装到
+#   /usr/libexec/steamos-growroot（脚本）
+#   /etc/systemd/system/steamos-growroot.service（本单元，并 enable）
+Description=SteamOS: grow root partition to fill the disk (best-effort)
+Documentation=file:///usr/libexec/steamos-growroot
+
+# 早期启动执行：必须早于任何需要大量磁盘空间的服务（Steam/gamescope）。
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target
+# 根必须已可写（脚本要改 GPT + 在线 resize2fs）。
+ConditionPathIsReadWrite=/
+ConditionPathExists=/usr/libexec/steamos-growroot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 脚本自身任何异常都 exit 0（best-effort）；这里再兜一道，确保不拖垮启动。
+ExecStart=/usr/libexec/steamos-growroot
+SuccessExitStatus=0
+
+[Install]
+WantedBy=sysinit.target

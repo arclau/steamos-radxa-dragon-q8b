@@ -1,0 +1,29 @@
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-tc956x.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-tc956x.c
+index fbe1fc9e7..3e8145156 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-tc956x.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-tc956x.c
+@@ -216,8 +216,8 @@ static void tc956x_msigen_irq_domain_exit(struct irq_domain *irq_domain)
+ static struct irq_domain *
+ tc956x_msigen_irq_domain_instantiate(struct tc956x_data *td)
+ {
+-	struct irq_domain_chip_generic_info dgc_info;
+-	struct irq_domain_info info;
++	struct irq_domain_chip_generic_info dgc_info = { };
++	struct irq_domain_info info = { };
+ 
+ 	dgc_info.name = "tc956x-msigen";
+ 	dgc_info.handler = handle_level_irq;
+@@ -226,11 +226,13 @@ tc956x_msigen_irq_domain_instantiate(struct tc956x_data *td)
+ 	dgc_info.init = tc956x_msigen_irq_chip_init;
+ 	dgc_info.exit = tc956x_msigen_irq_chip_exit;
+ 
++	info.fwnode = dev_fwnode(td->dev);
+ 	info.domain_flags = IRQ_DOMAIN_FLAG_DESTROY_GC;
+ 	info.size = HWIRQ_COUNT;
+ 	info.hwirq_max = HWIRQ_COUNT;
+ 	info.ops = &irq_generic_chip_ops;
+ 	info.host_data = td;
++	info.dev = td->dev;
+ 	info.dgc_info = &dgc_info;
+ 	info.init = tc956x_msigen_irq_domain_init;
+ 	info.exit = tc956x_msigen_irq_domain_exit;
