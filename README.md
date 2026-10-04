@@ -21,7 +21,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 | 2 | `vulkaninfo` 报 Adreno 690，游戏 Vulkan 渲染出画 | ✅ 《星露谷物语》真机可玩 |
 | 3 | 音频（3.5mm + HDMI/DP） | ⚠️ HDMI/DP ✅；**3.5mm ❌**（WCD938x EIO，卡 ADSP 固件） |
 | 4 | 有线网络（2×2.5GbE）与 WiFi/BT | ✅ 均已验证 |
-| 5 | 外接手柄被识别为 Steam 输入设备 | ⚠️ USB ✅（有「开机前插→无输入」坑）；BT 未测 |
+| 5 | 外接手柄被识别为 Steam 输入设备 | ✅ USB 与 BT 均已验证（USB 有「开机前插→无输入」坑，重插可解） |
 | 6 | 从整盘镜像可复现部署 | ✅ 已验证 |
 
 ## 已实现
@@ -54,7 +54,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 
 ### 网络
 - **有线**：双 2.5GbE（Toshiba TC956x PCIe 桥 + QCA8081 PHY），补丁后两口驱动均绑定。
-- **Wi-Fi**：**Synaptics SYN43756B0（AMPAK AP6276P）**——主线与厂商 BSP 均零支持；自写内核补丁 + 真实固件后 `brcmfmac` 绑定、`wlan0` 起、双频段枚举、**重启自加载**。
+- **Wi-Fi**：**Synaptics SYN43756B0（AMPAK AP6276P）**——主线与厂商 BSP 均零支持；自写内核补丁 + 真实固件后 `brcmfmac` 绑定、`wlan0` 起、双频段枚举、**重启自加载**。该支持是**该模组专属**（内核补丁 0002 + 对应固件），换用其它 M.2 模组需另行适配。
 - **蓝牙**：UART patchram；共享模组的 BT 核冷启动未就绪时 bluetoothd 首开即失败且不重试，用 `q8b-bt-bringup.service` 自愈 —— 冷启动约 36s 自动起、可扫描发现设备。
 
 ### 系统与会话
@@ -72,7 +72,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 ## 已知限制
 
 - **3.5mm 音频**暂不可用（WCD938x EIO，卡 ADSP 固件）。
-- **蓝牙手柄**未实测；USB 手柄存在「开机前已插 → 无输入」的坑（重插或复位可解）。
+- USB 手柄存在「开机前已插 → 无输入」的坑（重插或复位可解）。
 - 板上**无输入设备**时，Game Mode 只能显示、无法操作。
 - 冷启动后约 1 分钟音频才就绪；`default-sink-volume` 设置未生效。
 
@@ -82,7 +82,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 - 存储：板载 UFS 3.1 / microSD / M.2 NVMe 任一
 - 显示：HDMI 或 USB-C DP-Alt
 - 输入：USB 键鼠 / 手柄（当前**板上无输入设备**时 Game Mode 只能看不能操作）
-- 无线：M.2 E-key Wi-Fi 6E/BT 模组（本项目用 Synaptics SYN43756B0 / AMPAK AP6276P）
+- 无线：M.2 E-key 插槽；本项目在 **Synaptics SYN43756B0（AMPAK AP6276P）** 上验证 —— 换其它模组需各自的驱动/固件适配，不保证开箱可用
 
 ---
 

@@ -22,7 +22,7 @@ x86 games run through FEX + ARM64 Proton translation.
 | 2 | `vulkaninfo` reports Adreno 690, games render via Vulkan | ✅ *Stardew Valley* playable on real hardware |
 | 3 | Audio (3.5 mm + HDMI/DP) | ⚠️ HDMI/DP ✅; **3.5 mm ❌** (WCD938x EIO, stuck on ADSP firmware) |
 | 4 | Wired networking (2× 2.5GbE) and Wi-Fi/BT | ✅ All verified |
-| 5 | External gamepad recognized as a Steam input device | ⚠️ USB ✅ (there is a "plugged in before boot → no input" gotcha); BT untested |
+| 5 | External gamepad recognized as a Steam input device | ✅ Both USB and BT verified (USB has a "plugged in before boot → no input" gotcha; replug fixes it) |
 | 6 | Reproducible deployment from a full-disk image | ✅ Verified |
 
 ## What is implemented
@@ -78,7 +78,8 @@ x86 games run through FEX + ARM64 Proton translation.
 - **Wi-Fi**: **Synaptics SYN43756B0 (AMPAK AP6276P)** — no support in either mainline
   or the vendor BSP; with a hand-written kernel patch + the real firmware,
   `brcmfmac` binds, `wlan0` comes up, both bands enumerate, and it **auto-loads
-  across reboots**.
+  across reboots**. This support is **specific to this module** (kernel patch 0002 +
+  matching firmware); a different M.2 module needs its own port.
 - **Bluetooth**: UART patchram; when the shared module's BT core isn't ready at cold
   boot, bluetoothd fails on first open and never retries, so `q8b-bt-bringup.service`
   self-heals it — it comes up automatically in ~36 s on cold boot and can scan for
@@ -108,8 +109,8 @@ x86 games run through FEX + ARM64 Proton translation.
 ## Known limitations
 
 - **3.5 mm audio** is not available yet (WCD938x EIO, stuck on ADSP firmware).
-- **Bluetooth gamepads** are untested; USB gamepads have a "plugged in before boot →
-  no input" gotcha (replug or reset fixes it).
+- USB gamepads have a "plugged in before boot → no input" gotcha (replug or reset
+  fixes it).
 - With **no input device** on the board, Game Mode can only display, not be operated.
 - Audio takes about 1 minute to become ready after a cold boot; the
   `default-sink-volume` setting does not take effect.
@@ -121,8 +122,9 @@ x86 games run through FEX + ARM64 Proton translation.
 - Display: HDMI or USB-C DP-Alt
 - Input: USB keyboard/mouse / gamepad (with **no input device** on the board, Game
   Mode can only be viewed, not operated)
-- Wireless: M.2 E-key Wi-Fi 6E/BT module (this project uses Synaptics SYN43756B0 /
-  AMPAK AP6276P)
+- Wireless: M.2 E-key slot; this project is verified on **Synaptics SYN43756B0
+  (AMPAK AP6276P)** — other modules need their own driver/firmware support and are
+  not guaranteed to work out of the box
 
 ---
 
