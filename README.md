@@ -3,7 +3,7 @@
 把 **Valve 官方 SteamOS ARM**（Steam Frame / Deckard 构建的 aarch64 userspace）移植到
 **Radxa Dragon Q8B**（Qualcomm **SC8280XP** / 骁龙 8cx Gen 3 / **Adreno 690**）单板计算机。
 
-装上后是完整的 SteamOS：**Game Mode**（gamescope + Steam Gamepad UI）与 **KDE Plasma 桌面**，
+装上后进入 SteamOS **Game Mode**（gamescope + Steam Gamepad UI），
 x86 游戏经 FEX + ARM64 Proton 转译运行。
 
 > 这是**跨 SoC** 移植：Steam Frame 底包面向高通手机平台，Q8B 是笔记本/计算平台（SC8280XP），
@@ -13,17 +13,14 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 
 ## 状态
 
-对照 7 条成功定义：
-
 | # | 成功定义 | 状态 |
 |---|---|---|
 | 1 | 从 UFS / NVMe 引导进入 SteamOS Game Mode | ✅ 已验证（板载 UFS） |
 | 2 | `vulkaninfo` 报 Adreno 690，游戏 Vulkan 渲染出画 | ✅ 《星露谷物语》真机可玩 |
 | 3 | 音频（3.5mm + HDMI/DP） | ⚠️ HDMI/DP ✅；**3.5mm ❌**（WCD938x EIO，卡 ADSP 固件） |
 | 4 | 有线网络（2×2.5GbE）与 WiFi/BT | ✅ 均已验证 |
-| 5 | Desktop Mode（KDE Plasma）切换并可切回 | ❓ 未验证（组件齐） |
-| 6 | 外接手柄被识别为 Steam 输入设备 | ⚠️ USB ✅（有「开机前插→无输入」坑）；BT 未测 |
-| 7 | 从整盘镜像可复现部署 | ✅ 已验证 |
+| 5 | 外接手柄被识别为 Steam 输入设备 | ⚠️ USB ✅（有「开机前插→无输入」坑）；BT 未测 |
+| 6 | 从整盘镜像可复现部署 | ✅ 已验证 |
 
 ## 已实现
 
@@ -73,7 +70,6 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 ## 已知限制
 
 - **3.5mm 音频**暂不可用（WCD938x EIO，卡 ADSP 固件）。
-- **Desktop Mode（KDE Plasma）切换**未实测。
 - **蓝牙手柄**未实测；USB 手柄存在「开机前已插 → 无输入」的坑（重插或复位可解）。
 - 板上**无输入设备**时，Game Mode 只能显示、无法操作。
 - 冷启动后约 1 分钟音频才就绪；`default-sink-volume` 设置未生效。
