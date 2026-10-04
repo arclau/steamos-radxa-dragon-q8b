@@ -1,5 +1,11 @@
 # firmware/WHENCE — 运行时固件来源与许可
 
+> **English:** This directory holds runtime firmware blobs (build inputs) that the kernel
+> loads from `/lib/firmware`. Paths follow the board device tree `firmware-name` properties
+> (plus fixed names from driver catalogs), not chip-name guesses. The repo's GPL-2.0 does
+> **not** cover these binaries; each is distributed under its own original license. Sources
+> are listed in the table below.
+
 本目录是**构建输入**：内核从 `/lib/firmware` 加载的运行时 blob。路径**以板级 DT 的
 `firmware-name` 为唯一权威**（另加驱动 catalog 里的固定名），不按芯片名想当然命名。
 
@@ -19,13 +25,13 @@
 | `qcom/sc8280xp/qcvss8280.mbn` | VSS | **radxa-pkg/radxa-firmware** | |
 | `qcom/sc8280xp/qupv3fw.elf` | QUPv3（qup0/1/2） | **radxa-pkg/radxa-firmware** | upstream 没有 |
 | `qcom/sc8280xp/radxa/dragon-q8b/qcadsp8280.mbn` | ADSP | **radxa-pkg/radxa-firmware** | Radxa 板级调优版 |
-| `qcom/sc8280xp/SC8280XP-Radxa-Dragon-Q8B-tplg.bin` | ALSA 音频拓扑 | **本地构建**：`ref/audioreach-topology/SC8280XP-Radxa-Dragon-Q8B.m4` 经 `m4` + `alsatplg` 生成 | 拓扑源在 `ref/`，不进 git |
-| `brcm/brcmfmac43756-pcie.bin` / `.clm_blob` / `.txt` | Wi-Fi SYN43756B0（AP6276P） | **AMPAK AP6276P vendor 包**（`ref/ap6276p/`） | 改名自 vendor 原文件 |
+| `qcom/sc8280xp/SC8280XP-Radxa-Dragon-Q8B-tplg.bin` | ALSA 音频拓扑 | **本地构建**：由 AudioReach topology 模板 `SC8280XP-Radxa-Dragon-Q8B.m4` 经 `m4` + `alsatplg` 生成 | 模板源不随仓库分发 |
+| `brcm/brcmfmac43756-pcie.bin` / `.clm_blob` / `.txt` | Wi-Fi SYN43756B0（AP6276P） | **AMPAK AP6276P vendor 包** | 改名自 vendor 原文件 |
 | `brcm/BCM.hcd` / `brcm/SYN43756B0.hcd` | BT patchram | 同上 | 驱动只认兜底名 `brcm/BCM.hcd` |
 
 - **vendor 固件来源**：`https://github.com/radxa-pkg/radxa-firmware`
   （`radxa-firmware-sc8280xp/lib/firmware/qcom/sc8280xp/`）。
-- **Wi-Fi/BT 固件**：AP6276P 模组 vendor 包（本地只读副本 `ref/ap6276p/`，不进 git）。
+- **Wi-Fi/BT 固件**：AP6276P 模组 vendor 包（不随仓库分发）。
 
 ## 重新获取
 

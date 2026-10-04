@@ -1,0 +1,16 @@
+# .gitattributes — 二进制文件不做文本处理（无 diff / 无换行符转换 / 无 merge）
+#
+# 这些是固件 blob、预编译二进制与镜像产物，按字节处理。
+
+# 运行时固件（见 firmware/WHENCE）
+*.bin      binary
+*.mbn      binary
+*.elf      binary
+*.fw       binary
+*.hcd      binary
+*.clm_blob binary
+
+# 预编译工具 / 镜像产物
+busybox-aarch64 binary
+*.img      binary
+*.zst      binary

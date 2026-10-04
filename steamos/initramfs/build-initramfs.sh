@@ -11,9 +11,9 @@
 #   BUSYBOX=<path>  指定静态 aarch64 busybox；不给则按下方候选表自动找。
 #
 # 来源与溯源：
-#   steamos/initramfs/init 改编自 SteamOS-ARM-Handhelds
-#     ref/steamos-arm-handhelds/external-and-mods/kernel-common/initramfs/init
-#   构建方式同其 external-and-mods/kernel-common/build.sh:252-268。
+#   steamos/initramfs/init 改编自 SteamOS-ARM-Handhelds 的
+#     external-and-mods/kernel-common/initramfs/init
+#   构建方式同其 external-and-mods/kernel-common/build.sh。
 #   busybox 需为 aarch64 静态；仓库内置副本：
 #     steamos/initramfs/tools/busybox-aarch64   （发布/CI 用，见该目录说明）
 #

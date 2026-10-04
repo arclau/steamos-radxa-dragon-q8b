@@ -155,7 +155,7 @@ fi
 # ── 7. 路径契约：自有"活文件"无残留旧路径 ──────────────────────────────────
 hdr "路径契约（无残留旧路径）"
 # 只扫"活文件"：Makefile 与 scripts/config/steamos 下的 *.sh。
-# 跳过：ref/（只读参考）、本脚本自身（含模式定义）。
+# 跳过：本脚本自身（含模式定义）。
 stale_pat='build-q8b|kernel-out|build-steamos-rootfs|build-steamos-bootloader|build-image-work'
 live_files=(Makefile)
 while IFS= read -r f; do

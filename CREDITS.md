@@ -1,5 +1,9 @@
 # CREDITS — 致谢与第三方来源
 
+> **English:** This file credits third-party sources and lists their licenses. See
+> [`README.en.md`](README.en.md) for an English overview of the project. Proper names,
+> URLs and SPDX license identifiers below are language-neutral.
+
 本项目的设备支持全部自写，但**站在许多人的肩膀上**。以下按「怎么用」分类，逐项列出
 来源与许可。若你是其中某个项目的作者且希望调整署名方式，欢迎开 issue。
 

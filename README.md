@@ -1,5 +1,7 @@
 # SteamOS for Radxa Dragon Q8B
 
+> 中文 | [English](README.en.md)
+
 把 **Valve 官方 SteamOS ARM**（Steam Frame / Deckard 构建的 aarch64 userspace）移植到
 **Radxa Dragon Q8B**（Qualcomm **SC8280XP** / 骁龙 8cx Gen 3 / **Adreno 690**）单板计算机。
 

@@ -2,8 +2,8 @@
 #
 # q8b-initramfs init — 挂 root、在 switch_root 前挂 SteamOS 的 /etc overlay、切换根。
 #
-# 来源：改编自 SteamOS-ARM-Handhelds
-#   ref/steamos-arm-handhelds/external-and-mods/kernel-common/initramfs/init
+# 来源：改编自 SteamOS-ARM-Handhelds 的
+#   external-and-mods/kernel-common/initramfs/init
 # 改动：去掉该项目的 ROCKNIX/ABL 专有逻辑（PARTNAME=ROCKNIX 引导分区、mmcblk 扫描、
 #       USB debug gadget、konkr OTA 恢复），改为本板 UEFI/GPT 布局：
 #       按 cmdline 的 root= 解析（UUID= / PARTLABEL=），并保留最关键的

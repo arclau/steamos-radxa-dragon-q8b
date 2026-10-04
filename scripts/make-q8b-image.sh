@@ -2,7 +2,7 @@
 #
 # make-q8b-image.sh — 为 Radxa Dragon Q8B（Qualcomm SC8280XP / Adreno 690）打**可刷写整盘镜像**
 #
-# 布局与启动约定**逐条对齐 Radxa 官方镜像**（r7，见 ref/radxa-image-build/build-*-image.fish）：
+# 布局与启动约定**逐条对齐 Radxa 官方镜像**（r7 的 guestfish 打包脚本）：
 #   GPT：p1 config(vfat) / p2 efi(ESP, vfat) / p3 rootfs(ext4)
 #   启动：SPI 里的 UEFI(EDK2) → ESP 上的 systemd-boot → BLS 条目 → 我们的 EFI zboot Image + DTB
 #
@@ -55,8 +55,8 @@
 #                 earlycon=qcom_geni,0x884000 需 UEFI 已初始化该 UART 时钟，否则可能挂总线，
 #                 仅在 console= 拿不到输出时才用 CMDLINE_EXTRA 加（见首启 runbook）。
 #   KARGS         固定内核参数，默认 clk_ignore_unused。
-#                 Radxa 官方 r7 明确 "fix: add clk_ignore_unused to kernel cmdline"
-#                 （ref/radxa-image-build/changelog-r7.md:182）。qcom 平台典型坑：clk 框架
+#                 Radxa 官方 r7 changelog 明确 "fix: add clk_ignore_unused to kernel cmdline"。
+#                 qcom 平台典型坑：clk 框架
 #                 会关掉"看似未用"的时钟，导致存储/显示/USB 起不来甚至挂死。
 #                 不想要就设 KARGS=""。
 #   ENTRY_TITLE   BLS 条目标题。

@@ -95,7 +95,7 @@ done
 unset _osr
 
 # ── 4) mask 掉 Frame 专有 unit（SBC 上无对应硬件）────────────────────────────
-# 证据与理由（逐条）见文件头注释 + ref/steamos-arm-handhelds/scripts/apply-overlays.sh:249-277。
+# 证据与理由（逐条）见文件头注释 + SteamOS-ARM-Handhelds 的 apply-overlays.sh。
 # 系统级：
 SYS_UNITS="
 steamvr-program-ble.service steamvr-v4l2loopback.service
