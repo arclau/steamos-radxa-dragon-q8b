@@ -50,20 +50,33 @@ GUID="$(printf '%s\n' "$INFO" | sed -n 's/^Partition unique GUID: \([0-9A-Fa-f-]
 NAME="$(printf '%s\n' "$INFO" | sed -n "s/^Partition name: '\(.*\)'.*/\1/p")"
 [[ -n "$START" && -n "$TYPECODE" && -n "$GUID" ]] || { log "解析分区属性失败，跳过"; exit 0; }
 
-# 幂等判据：根分区**末尾是否已到磁盘最后一个可用扇区**。
-# ⚠️ 曾经的血案（devlog/2026-10-09-01）：旧代码用 `sgdisk -F`（第一个空闲扇区）判空，
-#   但 GPT 与 p1 之间（本镜像 = 扇区 6..32767）本来就是空闲 → 恒返回 256 → 每次
-#   启动都误判「还有空间」，于是**每次开机都重写分区表**（sgdisk -e/-d/-n）+ partx +
-#   resize2fs，白花 ~3s 且有改坏分区表的风险。
-#   取「磁盘末可用扇区」用 `sgdisk -p` 的 "last usable sector is N"——**不要用 `sgdisk -E`**：
-#   真机实测它在本 4096B 扇区盘上返回 32767（错的），会导致新镜像首启误判「已到盘尾」而跳过扩容。
-DISK_LAST="$(sgdisk -p "$DISK" 2>/dev/null | sed -n 's/.*last usable sector is \([0-9]*\).*/\1/p')"
-if [ -n "$PART_LAST" ] && [ -n "$DISK_LAST" ] && [ "$PART_LAST" -ge "$DISK_LAST" ]; then
-  log "根分区已在盘尾（last=$PART_LAST disk_last=$DISK_LAST），跳过"
+# 幂等判据：根分区**末尾是否已到物理磁盘末尾**。
+# ⚠️ 两次血案（devlog/2026-10-09-01 → 2026-10-09-02）：
+#   1) 旧代码用 `sgdisk -F`（第一个空闲扇区）判空 —— GPT 与 p1 之间的空隙恒空闲 →
+#      恒返回 256 → 每次开机都误判「还有空间」→ **每次重写分区表**（sgdisk -e/-d/-n）
+#      + partx + resize2fs，白花 ~3s 且有改坏分区表的风险。
+#   2) 改用 `sgdisk -p` 的 "last usable sector" 后，**在「小镜像 dd 到大盘」的首启场景失效**：
+#      GPT 记录的是镜像自身尺寸（如 16G），`sgdisk -p` 与 `sgdisk -i` 都从这份**陈旧 GPT**
+#      取值 → 两者相等 → 误判「已在盘尾」→ **永不扩容**（根写满 → Steam 崩 → 黑屏）。
+#      真机实测（2026-10-09）：477G TF 卡刷 16G 镜像后 `sgdisk -p` 报 last usable=33554398
+#      （=16G），而物理盘是 1000243200 个 512B 扇区；`sgdisk -E` 同样不可信（返回 32767）。
+#   3) 正解：用**物理尺寸**判据（sysfs `/sys/block/$PK/size` 恒以 512B 为单位）。
+#      分区末尾用 `sgdisk -i` 的 Last sector（逻辑扇区）× (logical_block_size/512) 归一到
+#      512B 单位；留 8MiB slack 覆盖 GPT 备份 + 2048 扇区对齐。
+LOGICAL="$(cat "/sys/block/$PK/queue/logical_block_size" 2>/dev/null || echo 512)"
+DISK_512="$(cat "/sys/block/$PK/size" 2>/dev/null || true)"
+FACTOR=$(( LOGICAL / 512 )); [ "$FACTOR" -ge 1 ] || FACTOR=1
+if [ -z "$PART_LAST" ] || [ -z "$DISK_512" ]; then
+  log "取不到分区末尾或物理磁盘尺寸（part_last='$PART_LAST' disk='$DISK_512'），跳过"
+  exit 0
+fi
+PART_LAST_512=$(( PART_LAST * FACTOR ))
+if [ "$PART_LAST_512" -ge "$(( DISK_512 - 16384 ))" ]; then
+  log "根分区已在盘尾（part_last=${PART_LAST_512} disk=${DISK_512} [512B扇区]），跳过"
   exit 0
 fi
 
-log "扩容 $ROOT_SRC：disk=$DISK part=$PARTNUM start=$START last=$PART_LAST disk_last=$DISK_LAST"
+log "扩容 $ROOT_SRC：disk=$DISK part=$PARTNUM start=$START last=${PART_LAST_512} disk=${DISK_512} [512B扇区]"
 
 ARGS=(-d "$PARTNUM" -n "$PARTNUM:$START:0" -t "$PARTNUM:$TYPECODE" -u "$PARTNUM:$GUID")
 [[ -n "$NAME" ]] && ARGS+=(-c "$PARTNUM:$NAME")
