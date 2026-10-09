@@ -28,6 +28,7 @@
 #   （历史：曾有 §15「禁止系统休眠」（mask 睡眠单元）——2026-10-04 已移除，
 #     恢复系统原生睡眠行为。理由见 §15 处注释。）
 #     §16 DRM 热插拔看门狗（无显示器启动 → 后插屏 → 重启 steam.service 一次）。
+#     §17 强制默认登录模式 = Game Mode（Desktop Mode 在本板必黑屏，防止误切砖）。
 #
 # 用法：
 #   sudo steamos/apply-sc8280xp-overlay.sh <rootfs-dir>
@@ -403,7 +404,30 @@ install -d -m0755 "$R/etc/systemd/user/default.target.wants"
 ln -sfn /etc/systemd/user/q8b-drm-hotplug-watch.service \
         "$R/etc/systemd/user/default.target.wants/q8b-drm-hotplug-watch.service"
 
-# ── 17) 自检 ────────────────────────────────────────────────────────────────
+# ── 17) 强制默认登录模式 = Game Mode（防止误切 Desktop Mode 黑屏）────────────
+# 根因（真机，devlog/2026-10-09-01）：本板 mask 了 steamvr.service（Frame VR 无硬件），
+#   而 Desktop Mode 会话链路 plasma.desktop → plasma-session.target →
+#   steamvr-plasma.service → Requires=steamvr.service（mask）→ 内层立刻退出 →
+#   gamescope 无客户端 → 黑屏。一旦默认登录模式被切成 desktop
+#   （steamosctl switch-to-desktop-mode / Steam UI「切换到桌面模式」会写
+#   /etc/sddm.conf.d/zz-steamos-autologin.conf），下次冷启动即黑屏。
+# 处置：装一个 oneshot 单元，在 display-manager 之前把登录模式钉回 game（幂等）。
+#   素材来自同仓 steamos/force-game-mode/。
+log "安装强制 Game Mode 登录（q8b-force-game-mode）"
+install -d -m0755 "$R/usr/libexec"
+install -m0755 "$SCRIPT_DIR/force-game-mode/q8b-force-game-mode.sh" \
+               "$R/usr/libexec/q8b-force-game-mode"
+install -m0644 "$SCRIPT_DIR/force-game-mode/q8b-force-game-mode.service" \
+               "$R/etc/systemd/system/q8b-force-game-mode.service"
+install -d -m0755 "$R/etc/systemd/system/multi-user.target.wants"
+ln -sfn /etc/systemd/system/q8b-force-game-mode.service \
+        "$R/etc/systemd/system/multi-user.target.wants/q8b-force-game-mode.service"
+# 同时把 zz 文件在镜像里预置为 Game Mode（首启即便单元因故未跑也正确）。
+install -d -m0755 "$R/etc/sddm.conf.d"
+printf '[Autologin]\nSession=gamescope-wayland.desktop\n' \
+  > "$R/etc/sddm.conf.d/zz-steamos-autologin.conf"
+
+# ── 18) 自检 ────────────────────────────────────────────────────────────────
 log "自检："
 ok=1
 [[ -f "$R/etc/fstab" ]] && grep -q "PARTLABEL=${ROOT_PARTLABEL}.* / " "$R/etc/fstab" \
@@ -504,5 +528,15 @@ done
 [[ "$(readlink "$R/etc/systemd/user/default.target.wants/q8b-drm-hotplug-watch.service")" == "/etc/systemd/user/q8b-drm-hotplug-watch.service" ]] \
   && echo "  OK   DRM 热插拔看门狗已启用（default.target）" \
   || { echo "  BAD  看门狗未启用（无显示器启动后插屏不会自愈）"; ok=0; }
+# 强制 Game Mode（§17）：脚本 + unit + 启用软链 + 预置的 sddm autologin 文件
+[[ -x "$R/usr/libexec/q8b-force-game-mode" ]] \
+  && echo "  OK   force-game-mode 脚本已安装" \
+  || { echo "  BAD  缺 /usr/libexec/q8b-force-game-mode"; ok=0; }
+[[ "$(readlink "$R/etc/systemd/system/multi-user.target.wants/q8b-force-game-mode.service")" == "/etc/systemd/system/q8b-force-game-mode.service" ]] \
+  && echo "  OK   q8b-force-game-mode.service 已启用" \
+  || { echo "  BAD   force-game-mode 未启用（切到 Desktop Mode 后会黑屏）"; ok=0; }
+grep -qx 'Session=gamescope-wayland.desktop' "$R/etc/sddm.conf.d/zz-steamos-autologin.conf" 2>/dev/null \
+  && echo "  OK   预置 sddm autologin = gamescope-wayland.desktop（Game Mode）" \
+  || { echo "  BAD  sddm autologin 未预置为 Game Mode"; ok=0; }
 [[ $ok -eq 1 ]] || { echo "ERROR: overlay 自检失败" >&2; exit 1; }
 log "完成。rootfs: $R"

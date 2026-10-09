@@ -1,7 +1,7 @@
 #!/bin/bash
 # q8b-bt-bringup — bring up the Q8B UART Bluetooth (Broadcom/SYN43756, AP6276P).
 #
-# Why this exists (root cause, observed on hardware):
+# Why this exists (root cause, evidence in devlog/2026-10-04-02):
 #   Wi-Fi and Bluetooth live on the same M.2 E-key module (AP6276P /
 #   SYN43756B0). Wi-Fi is PCIe, BT is UART (988000.serial / serial1).
 #   On a *cold* boot the BT core is not yet responsive when hci0 is first

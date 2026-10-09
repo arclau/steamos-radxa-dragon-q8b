@@ -49,13 +49,20 @@ by_partlabel() {
   return 1
 }
 
-# 按文件系统 UUID 找设备（busybox blkid）。优先 -s/-o，退化为解析默认输出。
+# 按文件系统 UUID 找设备。
+#
+# ⚠️ 曾经的血案（devlog/2026-10-09-01）：busybox 的 `blkid` **忽略 -s/-o**，
+#    直接打印整条记录：`/dev/sda3: LABEL="rootfs" UUID="…" TYPE="ext4"`。
+#    旧代码 `got="$(blkid -s UUID -o value "$d")"` 于是拿到「整条字符串」（非空），
+#    随后的 `[ -n "$got" ] || got="$(…sed…)"` 兜底**被跳过**，`[ "$got" = "$want" ]`
+#    永远不等 → `resolve_root` 循环跑满 60×0.5s = **30s** 才退化到 `mount UUID=…`。
+#    真机实测：kernel 阶段因此多花 ~30s（12s→32.8s 的静默空档）。
+#    修法：一律用 sed 从输出里抽出 `UUID="…"`，不再依赖 -s/-o。
 by_fsuuid() {
   want="$1"
   for d in /dev/*[0-9] /dev/*p[0-9]; do
     [ -b "$d" ] || continue
-    got="$(blkid -s UUID -o value "$d" 2>/dev/null)"
-    [ -n "$got" ] || got="$(blkid "$d" 2>/dev/null | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')"
+    got="$(blkid "$d" 2>/dev/null | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')"
     [ "$got" = "$want" ] && { echo "$d"; return 0; }
   done
   return 1

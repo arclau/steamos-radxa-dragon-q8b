@@ -10,7 +10,13 @@ Wants=bluetooth.service
 After=systemd-udev-settle.service
 
 [Service]
-Type=oneshot
+# ⚠️ 必须是 Type=exec/simple，**不能是 Type=oneshot**（devlog/2026-10-09-01）：
+#   systemd 对 `WantedBy=multi-user.target` 的单元会自动补 `Before=multi-user.target`
+#   （sshd/NM 也有）。Type=oneshot 时该单元「active」要等脚本跑完才算 → multi-user.target
+#   被卡住：真机实测冷启动该脚本要 ~18.5s（等 BT 核就绪 + 重载 hci_uart 的固定 sleep），
+#   直接拖慢开机 18.5s。改 Type=exec 后单元**立即** active，脚本在后台跑，不挡启动。
+#   （bring-up 本就 best-effort，晚 ~18s 起 BT 不影响用户。）
+Type=exec
 ExecStart=/usr/libexec/q8b-bt-bringup
 # Best-effort: never fail the boot.
 SuccessExitStatus=0 1

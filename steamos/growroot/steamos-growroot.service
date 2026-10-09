@@ -1,7 +1,7 @@
 [Unit]
 # steamos-growroot.service — 首次启动把根分区扩到整盘（best-effort，绝不阻断启动）。
 #
-# 背景（真机根因）：
+# 背景（真机根因，见 devlog/2026-10-03-13）：
 #   镜像按固定 SIZE 打包；刷到更大的 microSD/NVMe 后，根分区只有镜像那么大，
 #   剩余空间未分区。SteamOS + Steam 客户端 + shader cache 需要 GB 级空间，
 #   根写满会让 Steam 装不完/崩溃 → gamescope 的 --steam 会话从不提交 KMS →

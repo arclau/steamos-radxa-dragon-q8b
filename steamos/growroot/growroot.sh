@@ -41,19 +41,29 @@ for t in sgdisk partx resize2fs; do
   command -v "$t" >/dev/null 2>&1 || { log "缺 $t，跳过"; exit 0; }
 done
 
-# 盘尾还有空闲扇区？（sgdisk -F 打印第一个空闲扇区；无则空）
-FREE="$(sgdisk -F "$DISK" 2>/dev/null || true)"
-[[ -n "$FREE" ]] || { log "$DISK 无空闲空间，跳过"; exit 0; }
-
 # 采集原分区属性
 INFO="$(sgdisk -i "$PARTNUM" "$DISK" 2>/dev/null || true)"
 START="$(printf '%s\n' "$INFO" | sed -n 's/^First sector: \([0-9]*\).*/\1/p')"
+PART_LAST="$(printf '%s\n' "$INFO" | sed -n 's/^Last sector: \([0-9]*\).*/\1/p')"
 TYPECODE="$(printf '%s\n' "$INFO" | sed -n 's/^Partition GUID code: \([0-9A-Fa-f-]*\).*/\1/p')"
 GUID="$(printf '%s\n' "$INFO" | sed -n 's/^Partition unique GUID: \([0-9A-Fa-f-]*\).*/\1/p')"
 NAME="$(printf '%s\n' "$INFO" | sed -n "s/^Partition name: '\(.*\)'.*/\1/p")"
 [[ -n "$START" && -n "$TYPECODE" && -n "$GUID" ]] || { log "解析分区属性失败，跳过"; exit 0; }
 
-log "扩容 $ROOT_SRC：disk=$DISK part=$PARTNUM start=$START 空闲起=$FREE"
+# 幂等判据：根分区**末尾是否已到磁盘最后一个可用扇区**。
+# ⚠️ 曾经的血案（devlog/2026-10-09-01）：旧代码用 `sgdisk -F`（第一个空闲扇区）判空，
+#   但 GPT 与 p1 之间（本镜像 = 扇区 6..32767）本来就是空闲 → 恒返回 256 → 每次
+#   启动都误判「还有空间」，于是**每次开机都重写分区表**（sgdisk -e/-d/-n）+ partx +
+#   resize2fs，白花 ~3s 且有改坏分区表的风险。
+#   取「磁盘末可用扇区」用 `sgdisk -p` 的 "last usable sector is N"——**不要用 `sgdisk -E`**：
+#   真机实测它在本 4096B 扇区盘上返回 32767（错的），会导致新镜像首启误判「已到盘尾」而跳过扩容。
+DISK_LAST="$(sgdisk -p "$DISK" 2>/dev/null | sed -n 's/.*last usable sector is \([0-9]*\).*/\1/p')"
+if [ -n "$PART_LAST" ] && [ -n "$DISK_LAST" ] && [ "$PART_LAST" -ge "$DISK_LAST" ]; then
+  log "根分区已在盘尾（last=$PART_LAST disk_last=$DISK_LAST），跳过"
+  exit 0
+fi
+
+log "扩容 $ROOT_SRC：disk=$DISK part=$PARTNUM start=$START last=$PART_LAST disk_last=$DISK_LAST"
 
 ARGS=(-d "$PARTNUM" -n "$PARTNUM:$START:0" -t "$PARTNUM:$TYPECODE" -u "$PARTNUM:$GUID")
 [[ -n "$NAME" ]] && ARGS+=(-c "$PARTNUM:$NAME")

@@ -1,0 +1,19 @@
+[Unit]
+Description=Q8B: force Game Mode login (Desktop Mode is unsupported on this board)
+# 根因与理由见 devlog/2026-10-09-01 及 q8b-force-game-mode.sh 头部：
+# 本板 mask 了 steamvr.service，切到 Desktop Mode 后冷启动必黑屏。
+# 每次启动把默认登录模式钉回 Game Mode（幂等、best-effort）。
+# 必须在 SDDM 读配置之前运行；在 steamos-manager 之后运行（若它也写 zz 文件，则我们胜出）。
+After=steamos-manager.service
+Before=display-manager.service
+# 只在 /etc 可写时动手（/etc 是 overlayfs，正常 rw）。
+ConditionPathIsReadWrite=/etc
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/q8b-force-game-mode
+# 脚本自身任何异常都 exit 0；这里再兜一道，确保不拖垮启动。
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target
