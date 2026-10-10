@@ -1,0 +1,87 @@
+From: Q8B SteamOS port <noreply@localhost>
+Subject: [PATCH] Bluetooth: hci_bcm: keep DT max-speed and defer the baud switch
+
+bcm_serdev_probe() discards bcmdev->oper_speed when the controller has no
+reset/shutdown GPIO:
+
+	if (!bcmdev->shutdown) {
+		dev_warn(&serdev->dev,
+			 "No reset resource, using default baud rate\n");
+		bcmdev->oper_speed = bcmdev->init_speed;
+	}
+
+On the device-tree path init_speed is never populated (only the ACPI path
+sets it), so oper_speed ends up 0 and the "max-speed" the DT asked for is
+silently dropped.  On the Radxa Dragon Q8B this is not harmless: the link
+stays at 115200, which makes powering the adapter on take ~0.43 s.  Steam
+issues Set Powered=true and then StartDiscovery ~0.26 s later, so it gets
+org.bluez.Error.NotReady and enters a power-cycle storm -- which shows up
+in the Gamepad UI as a list that never refreshes, "Forget" that does
+nothing and a "Paired" section that never appears.
+
+Keep max-speed, but also defer the switch.  The early switch done by
+hci_uart_setup() (hu->proto->set_baudrate, i.e. HCI_VS_Update_UART_Baud_Rate
+0xfc18) runs before bcm_setup(), while the controller is still in its ROM
+bootloader; the SYN43756B0 (AMPAK AP6276P) only accepts 0xfc18 after its
+firmware has been loaded, so the early switch always times out:
+
+	Bluetooth: hci0: command 0xfc18 tx timeout
+	Bluetooth: hci0: BCM: failed to write update baudrate (-110)
+
+Setting no_early_set_baudrate moves the switch into bcm_setup(), right
+after btbcm_initialize() has loaded the firmware.  With that the link comes
+up at max-speed and a warm power cycle drops from ~0.43 s to well under
+Steam's 0.26 s window.
+
+Signed-off-by: Q8B SteamOS port <noreply@localhost>
+---
+Local fix for the Radxa Dragon Q8B SteamOS port (AMPAK AP6276P /
+BCM43756 over the SC8280XP GENI UART), not an upstream submission.
+
+On-board evidence (2026-10-09):
+  - warm power cycle at 115200 (hciconfig down/up): 0.430 s > 0.26 s.
+  - early 0xfc18 switch (3 Mbps and 1.5 Mbps): tx timeout, link down.
+  - the controller accepts 0xfc18 fine once the firmware is loaded.
+---
+ drivers/bluetooth/hci_bcm.c | 26 +++++++++++++++++++++-----
+ 1 file changed, 21 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/bluetooth/hci_bcm.c b/drivers/bluetooth/hci_bcm.c
+index 1a4fc3882..1c41c7625 100644
+--- a/drivers/bluetooth/hci_bcm.c
++++ b/drivers/bluetooth/hci_bcm.c
+@@ -1534,9 +1534,13 @@ static int bcm_serdev_probe(struct serdev_device *serdev)
+ 		return err;
+ 
+ 	if (!bcmdev->shutdown) {
+-		dev_warn(&serdev->dev,
+-			 "No reset resource, using default baud rate\n");
+-		bcmdev->oper_speed = bcmdev->init_speed;
++		if (bcmdev->oper_speed)
++			dev_info(&serdev->dev,
++				 "No reset resource, keeping max-speed %u\n",
++				 bcmdev->oper_speed);
++		else
++			dev_warn(&serdev->dev,
++				 "No reset resource, using default baud rate\n");
+ 	}
+ 
+ 	err = bcm_gpio_set_power(bcmdev, false);
+@@ -1553,6 +1557,17 @@ static int bcm_serdev_probe(struct serdev_device *serdev)
+ 			bcmdev->oper_speed = data->max_speed;
+ 	}
+ 
++	/*
++	 * The SYN43756B0 (AMPAK AP6276P) only accepts
++	 * HCI_VS_Update_UART_Baud_Rate (0xfc18) after its firmware has been
++	 * loaded, so the early switch done by hci_uart_setup() -- before
++	 * bcm_setup() runs -- always times out.  Defer the switch into
++	 * bcm_setup() so the host UART is only moved once the controller is
++	 * actually listening on the new rate.
++	 */
++	if (bcmdev->oper_speed)
++		bcmdev->no_early_set_baudrate = true;
++
+ 	return hci_uart_register_device(&bcmdev->serdev_hu, &bcm_proto);
+ }
+ 

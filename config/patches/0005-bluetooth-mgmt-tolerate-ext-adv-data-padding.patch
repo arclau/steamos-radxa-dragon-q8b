@@ -1,0 +1,74 @@
+From: Q8B SteamOS port <noreply@localhost>
+Subject: [PATCH] Bluetooth: MGMT: fix backward compatibility with userspace
+
+add_ext_adv_data() rejects the command unless the received length exactly
+equals the length implied by the header (adv_data_len + scan_rsp_len).
+That equality check was added by the CVE-2026-64126 fix to stop a
+too-short payload from being read past its end.  The over-read only
+happens when the payload is shorter than advertised, so the security
+requirement is a lower bound, not an exact match.
+
+Some bluetoothd releases (notably BlueZ 5.79 as shipped in the SteamOS
+userspace) send the advertising data padded with trailing zero bytes and
+set adv_data_len/scan_rsp_len to the meaningful length only.  The kernel
+then computes expected_len < data_len and fails the command with
+MGMT_STATUS_INVALID_PARAMS, which breaks BLE advertisement registration
+and, with it, any client that depends on it.
+
+Relax the check to a minimum-length check: still reject short payloads
+(preserving the CVE-2026-64126 protection) but accept extra trailing
+bytes, which are harmless to the advertising payload parser.
+
+Signed-off-by: Q8B SteamOS port <noreply@localhost>
+---
+Backport of the upstream fix for BLE advertisement registration failing
+with MGMT_STATUS_INVALID_PARAMS (0x0d) on radxa/linux-7.0.11.
+
+Upstream fix: 149324fc762c2a7acef9c26790566f81f475e51f
+  "Bluetooth: MGMT: Fix backward compatibility with userspace"
+  Author: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+Regression:   d3f7d17960ed50df3a6709c5158caff989c8c905
+  "Bluetooth: MGMT: validate Add Extended Advertising Data length"
+Downstream:   58d810354de1b19d9af86a9829ad555d934a4866 (rpi-6.18.y, in 6.18.36)
+
+On-board evidence and rationale:
+
+Root cause (reproduced on-board 2026-10-09):
+  - Steam Game Mode UI Bluetooth is unusable. steamui_system.txt repeats:
+      YldStartAdvertising: failed:
+      GDBus.Error:org.bluez.Error.Failed: Failed to register advertisement
+  - bluetoothd src/advertising.c:add_client_complete():
+      Failed to add advertisement: Invalid Parameters (0x0d)
+  - btmon (root) shows the failing MGMT command is the data one:
+      Add Extended Advertising Parameters (0x0054)  -> Success
+      Add Extended Advertising Data       (0x0055)  -> Invalid Parameters (0x0d)
+  - Raw 0x0055 payload captured via btsnoop is 18 bytes:
+      instance=5, adv_data_len=0, scan_rsp_len=7, then 15 data bytes
+      (the 7 meaningful bytes followed by 8 trailing zero bytes).
+      Kernel computes struct_size = 3 + 0 + 7 = 10 != 18 -> reject.
+  - Kernel side is otherwise healthy: btmgmt add-ext-adv-data with exact
+    lengths succeeds; legacy btmgmt add-adv succeeds; hci0 is UP RUNNING.
+
+This carries the upstream fix (149324fc762c) locally on
+radxa/linux-7.0.11, which predates its merge, so the SteamOS 5.79
+bluetoothd interoperates.  On-board verification (2026-10-09): after
+deploying this patch (bluetooth.ko sha256 ad03e48f...), bluetoothd no
+longer logs add_client_complete() Invalid Parameters and
+YldStartAdvertising succeeds.
+---
+ net/bluetooth/mgmt.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/bluetooth/mgmt.c b/net/bluetooth/mgmt.c
+index de5bd6b63..66fb5a187 100644
+--- a/net/bluetooth/mgmt.c
++++ b/net/bluetooth/mgmt.c
+@@ -9115,7 +9115,7 @@ static int add_ext_adv_data(struct sock *sk, struct hci_dev *hdev, void *data,
+ 	BT_DBG("%s", hdev->name);
+ 
+ 	expected_len = struct_size(cp, data, cp->adv_data_len + cp->scan_rsp_len);
+-	if (expected_len != data_len)
++	if (expected_len > data_len)
+ 		return mgmt_cmd_status(sk, hdev->id, MGMT_OP_ADD_EXT_ADV_DATA,
+ 				       MGMT_STATUS_INVALID_PARAMS);
+ 

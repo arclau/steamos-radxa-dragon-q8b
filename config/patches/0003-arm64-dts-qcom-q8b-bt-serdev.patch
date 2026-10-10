@@ -11,7 +11,7 @@ index c81544e91..b0dc59613 100644
  
 +	bluetooth {
 +		compatible = "brcm,bcm43438-bt";
-+		max-speed = <3000000>;
++		max-speed = <1500000>;
 +	};
 +
  	port {
