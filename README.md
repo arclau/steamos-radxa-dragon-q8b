@@ -29,11 +29,13 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 ### 内核与设备树
 - 基于 `radxa/kernel`（`7.0.11+`，`SMP PREEMPT`）交叉编译 **EFI zboot 内核** + 3397 个模块 + Q8B 设备树。
 - 内核配置**逐项对齐 Valve Steam Frame 内核**（从 Frame 内核内嵌的 IKCONFIG 提取出完整 config 做权威 diff），补齐 `PREEMPT`、`OVERLAY_FS`、`SCHED_CLASS_EXT`、`DEBUG_INFO_BTF`、`HID_PID`、`USB_HIDDEV`、`PM_WAKELOCKS`、`NO_HZ_IDLE`、`CPU_FREQ_DEFAULT_GOV_PERFORMANCE` 等。
-- **4 个内核补丁**（`config/patches/`，构建时幂等打入只读上游树）：
+- **6 个内核补丁**（`config/patches/`，构建时幂等打入只读上游树）：
   1. `tc956x` 网桥 `irq_domain` 结构体初始化 —— 修板载 2.5GbE 的 SP/PC alignment oops；
   2. `brcmfmac` 新增 **SYN43756 / AP6276P** Wi-Fi 模组支持 —— 主线无此芯片；
-  3. Q8B 蓝牙 `serdev` 设备树节点；
-  4. `brcmfmac` D3 子状态握手超时容错。
+  3. Q8B 蓝牙 `serdev` 设备树节点（`max-speed` 降为 1.5M，3M 在本板 UART 上会 tx timeout）；
+  4. `brcmfmac` D3 子状态握手超时容错；
+  5. 蓝牙 MGMT：容忍**补零的扩展广播数据** —— 放宽 CVE-2026-64126 的「精确长度」校验为「最小长度」，修复 BlueZ 5.79（SteamOS userspace）下 BLE 广播注册失败；
+  6. `hci_bcm`：保留 DT `max-speed` 并**延后波特率切换** —— 无 reset GPIO 时原代码丢弃 `oper_speed`，UART 停在 115200 导致 BT 上电慢，Steam 电源循环风暴（手柄列表不刷新）。
 
 ### 运行时固件
 - 补齐内核从 `/lib/firmware` 加载的**全部运行时固件**（路径以设备树 `firmware-name` 与驱动 catalog 为权威）：Adreno 690 复用的 `a660` GMU/SQE、GPU zap shader、ADSP/CDSP/SLPI/VSS/QUPv3、Iris VPU、Wi-Fi/BT 固件、ALSA 音频拓扑。来源与许可见 [`firmware/WHENCE`](firmware/WHENCE)。
@@ -93,9 +95,9 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 到 [Releases](../../releases) 下载对应介质的分卷 `.zst.part*` 与 `SHA256SUMS`，合并后解压：
 
 ```bash
-cat steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img.zst.part* > img.zst
+cat steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img.zst.part* > img.zst
 sha256sum -c SHA256SUMS          # 校验
-zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img
+zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img
 ```
 
 ### B. 云端构建（fork → 跑 workflow）
@@ -140,7 +142,7 @@ scripts/build-all.sh                # 一条龙：内核→模块→固件→ini
 
 ```bash
 # microSD / NVMe（从主机 dd）
-sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 # 板载 UFS：主机无法直接 dd，需在板上写入，或走 EDL
 ```
@@ -168,7 +170,8 @@ sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img of=/dev/sdX bs=4M st
 - **[radxa/kernel](https://github.com/radxa/kernel)**（GPL-2.0）—— 板级内核源码与 Q8B 设备树；
 - **[Valve Corporation](https://developer.valvesoftware.com/wiki/Steam_Frame)** —— 官方 SteamOS ARM（Steam Frame）userspace；
 - **[Radxa](https://github.com/radxa-build/radxa-dragon-midstream)** —— 打包脚本蓝本与 vendor 固件；
-- **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**、**[BusyBox](https://busybox.net/)**、**alsa-ucm-conf**、**AudioReach topology** —— 固件、initramfs、音频；
+- **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**、**[BusyBox](https://busybox.net/)**、**[alsa-ucm-conf](https://github.com/alsa-project/alsa-ucm-conf)**、**AudioReach topology** —— 固件、initramfs、音频；
+- **[radxa-pkg/alsa-ucm-conf](https://github.com/radxa-pkg/alsa-ucm-conf)** —— Q8B 的官方 ALSA UCM（本项目的 3.5mm/WCD938x 耳机通路即采用此 fork）；
 - **Sebastian Reichel (Collabora)** —— 补丁 `0004` 的原作者。
 
 **完整的逐项来源、许可与用法见 [`CREDITS.md`](CREDITS.md)**；固件来源见 [`firmware/WHENCE`](firmware/WHENCE)。

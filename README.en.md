@@ -35,13 +35,21 @@ x86 games run through FEX + ARM64 Proton translation.
   authoritative diff), filling in `PREEMPT`, `OVERLAY_FS`, `SCHED_CLASS_EXT`,
   `DEBUG_INFO_BTF`, `HID_PID`, `USB_HIDDEV`, `PM_WAKELOCKS`, `NO_HZ_IDLE`,
   `CPU_FREQ_DEFAULT_GOV_PERFORMANCE`, and others.
-- **4 kernel patches** (`config/patches/`, applied idempotently to the read-only
+- **6 kernel patches** (`config/patches/`, applied idempotently to the read-only
   upstream tree at build time):
   1. `tc956x` bridge `irq_domain` struct initialization — fixes an SP/PC alignment
      oops in the onboard 2.5GbE;
   2. `brcmfmac`: add **SYN43756 / AP6276P** Wi-Fi module support — not in mainline;
-  3. Q8B Bluetooth `serdev` device-tree node;
-  4. `brcmfmac` D3 substate handshake timeout tolerance.
+  3. Q8B Bluetooth `serdev` device-tree node (`max-speed` lowered to 1.5M; 3M caused
+     tx timeouts on this board's UART);
+  4. `brcmfmac` D3 substate handshake timeout tolerance;
+  5. Bluetooth MGMT: tolerate **zero-padded extended advertising data** — relax the
+     CVE-2026-64126 exact-length check to a minimum-length check, fixing BLE
+     advertisement registration under BlueZ 5.79 (the SteamOS userspace);
+  6. `hci_bcm`: keep the DT `max-speed` and **defer the baud switch** — without a
+     reset GPIO the old code dropped `oper_speed`, leaving the UART at 115200, which
+     made BT power-on slow and put Steam into a power-cycle storm (gamepad list that
+     never refreshes).
 
 ### Runtime firmware
 - Added **all runtime firmware** the kernel loads from `/lib/firmware` (paths are
@@ -138,9 +146,9 @@ Go to [Releases](../../releases) and download the split `.zst.part*` files for y
 target medium plus `SHA256SUMS`, then merge and decompress:
 
 ```bash
-cat steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img.zst.part* > img.zst
+cat steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img.zst.part* > img.zst
 sha256sum -c SHA256SUMS          # verify
-zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img
+zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img
 ```
 
 ### B. Cloud build (fork → run the workflow)
@@ -189,7 +197,7 @@ scripts/build-all.sh                # one shot: kernel→modules→firmware→in
 
 ```bash
 # microSD / NVMe (dd from a host)
-sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261010.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 # Onboard UFS: a host cannot dd it directly — write on the board, or use EDL
 ```
@@ -228,8 +236,10 @@ Also thanks to:
 - **[Radxa](https://github.com/radxa-build/radxa-dragon-midstream)** — the packaging
   script blueprint and vendor firmware;
 - **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**,
-  **[BusyBox](https://busybox.net/)**, **alsa-ucm-conf**, **AudioReach topology** —
-  firmware, initramfs, audio;
+  **[BusyBox](https://busybox.net/)**, **[alsa-ucm-conf](https://github.com/alsa-project/alsa-ucm-conf)**,
+  **AudioReach topology** — firmware, initramfs, audio;
+- **[radxa-pkg/alsa-ucm-conf](https://github.com/radxa-pkg/alsa-ucm-conf)** — the
+  official Q8B ALSA UCM (this project's 3.5 mm / WCD938x headphone path uses this fork);
 - **Sebastian Reichel (Collabora)** — original author of patch `0004`.
 
 **The full item-by-item sources, licenses and usage are in [`CREDITS.md`](CREDITS.md)**
