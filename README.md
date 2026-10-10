@@ -19,7 +19,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 |---|---|---|
 | 1 | 从 UFS / NVMe 引导进入 SteamOS Game Mode | ✅ 已验证（板载 UFS） |
 | 2 | `vulkaninfo` 报 Adreno 690，游戏 Vulkan 渲染出画 | ✅ 《星露谷物语》真机可玩 |
-| 3 | 音频（3.5mm + HDMI/DP） | ⚠️ HDMI/DP ✅；**3.5mm ❌**（WCD938x EIO，卡 ADSP 固件） |
+| 3 | 音频（3.5mm + HDMI/DP） | ✅ HDMI/DP ✅ + **3.5mm 耳机 ✅**（Radxa 官方 Q8B UCM，2026-10-10 闭环） |
 | 4 | 有线网络（2×2.5GbE）与 WiFi/BT | ✅ 均已验证 |
 | 5 | 外接手柄被识别为 Steam 输入设备 | ✅ USB 与 BT 均已验证（USB 有「开机前插→无输入」坑，重插可解） |
 | 6 | 从整盘镜像可复现部署 | ✅ 已验证 |
@@ -48,9 +48,9 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 - Game Mode（gamescope + Steam Gamepad UI）出画；HDMI 与双 USB-C DP 均可用，双 DP 即插即有。
 
 ### 音频
-- 自写 **ALSA UCM**（Q8B profile，3 份）+ **AudioReach 拓扑**，修掉 stock UCM 只认 X13s 导致的全程无声。
+- **ALSA UCM**：采用 Radxa 官方 Q8B UCM（`radxa-pkg/alsa-ucm-conf` fork，完整 WCD938x 耳机通路 `CLS_AB_HIFI`）+ 我们已验证的 DMI 分发器；**AudioReach 拓扑**修复 stock UCM 只认 X13s 导致的全程无声。
 - HDMI/DP 输出可用，**默认 sink 随插屏口自动切换**（三个 DP 设备各绑定 `JackControl`）。
-- 3.5mm 耳机 / 麦克风未通（WCD938x EIO，ADSP 拒 `GRAPH_START`）。
+- **3.5mm 耳机可用**（2026-10-10）：插耳机 `Headphone Jack=on` → 默认 sink 切到 `HiFi__Headphones__sink` → 出声。**麦克风输入未验**。
 
 ### 网络
 - **有线**：双 2.5GbE（Toshiba TC956x PCIe 桥 + QCA8081 PHY），补丁后两口驱动均绑定。
@@ -71,7 +71,7 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 
 ## 已知限制
 
-- **3.5mm 音频**暂不可用（WCD938x EIO，卡 ADSP 固件）。
+- **3.5mm 麦克风输入未验**（耳机输出已可用，2026-10-10）。
 - USB 手柄存在「开机前已插 → 无输入」的坑（重插或复位可解）。
 - 板上**无输入设备**时，Game Mode 只能显示、无法操作。
 - 冷启动后约 1 分钟音频才就绪；`default-sink-volume` 设置未生效。
@@ -93,9 +93,9 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 到 [Releases](../../releases) 下载对应介质的分卷 `.zst.part*` 与 `SHA256SUMS`，合并后解压：
 
 ```bash
-cat radxa-dragon-q8b_ufs.img.zst.part* > img.zst
+cat steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img.zst.part* > img.zst
 sha256sum -c SHA256SUMS          # 校验
-zstd -d img.zst -o radxa-dragon-q8b_ufs.img
+zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img
 ```
 
 ### B. 云端构建（fork → 跑 workflow）
@@ -140,7 +140,7 @@ scripts/build-all.sh                # 一条龙：内核→模块→固件→ini
 
 ```bash
 # microSD / NVMe（从主机 dd）
-sudo dd if=radxa-dragon-q8b_512.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 # 板载 UFS：主机无法直接 dd，需在板上写入，或走 EDL
 ```

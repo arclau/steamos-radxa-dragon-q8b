@@ -21,7 +21,8 @@
 #     §4b NM Wi-Fi 后端固化为 iwd（Valve 未随镜像下发该 conf，运行时才生成）。
 #     §9  SSH：启用 sshd + 预设 steamos 密码（公开镜像默认，默认 1234）。
 #     §10 根分区自扩（growroot）：首启把根扩到整盘，避免根写满导致 Steam 崩、HDMI 无画。
-#     §11 音频 UCM：Q8B 的 ALSA UCM（stock 只认 X13s，否则 PipeWire 只有 auto_null）。
+#     §11 音频 UCM：Radxa 的 Q8B UCM 树（stock 只认 X13s，否则 PipeWire 只有 auto_null；
+#            并补齐 3.5mm 的 WCD938x 耳机 codec 序列）。
 #     §12 去 VR/麦克风 WirePlumber 组件（有声卡节点时会 SEGV）。
 #     §13 默认 sink 音量 0.7。
 #     §14 蓝牙 bring-up（冷启动重试直到 SYN43756 控制器就绪）。
@@ -306,19 +307,45 @@ ln -sfn /etc/systemd/system/steamos-growroot.service \
 #   stock /usr/share/alsa/ucm2/Qualcomm/sc8280xp/sc8280xp.conf 只认 X13s DMI，
 #   其它机型走 `False.Error` → UCM import 直接 abort → WirePlumber 建不出 sink，
 #   只剩 auto_null；游戏把流连到 null，有播无声（而 speaker-test 直捅硬件却有声音）。
-# 落三份文件（素材见 steamos/ucm/，改动入库）：
-#   sc8280xp.conf          加 RadxaQ8B 分支（match product_name），去掉 X13s 的 False.Error
-#   Radxa-Dragon-Q8B.conf  use-case + BootSequence（HPHL/HPHR 用**原始**控制名 HPHL Switch，
-#                          amixer 的合并名 'HPHL' 不是合法 cset 目标）
-#   HiFi-Dragon-Q8B.conf   路由 + DP0/1/2/Headphones 设备；verb 里把 DSP 每流增益
-#                          （streamN.vol_ctrlN）拉到 65535——驱动默认 0x2000 明显偏小，
-#                          且 PipeWire 不接管该控制（只用软件音量），不设游戏声音会很小。
-log "安装 Q8B ALSA UCM（sc8280xp.conf + Radxa-Dragon-Q8B.conf + HiFi-Dragon-Q8B.conf）"
-UCM_DIR="$R/usr/share/alsa/ucm2/Qualcomm/sc8280xp"
-install -d -m0755 "$UCM_DIR"
-install -m0644 "$SCRIPT_DIR/ucm/sc8280xp.conf"         "$UCM_DIR/sc8280xp.conf"
-install -m0644 "$SCRIPT_DIR/ucm/Radxa-Dragon-Q8B.conf" "$UCM_DIR/Radxa-Dragon-Q8B.conf"
-install -m0644 "$SCRIPT_DIR/ucm/HiFi-Dragon-Q8B.conf"  "$UCM_DIR/HiFi-Dragon-Q8B.conf"
+#
+# 素材（steamos/ucm/，镜像 ALSA ucm2 目录结构，改动入库）：
+#   Qualcomm/sc8280xp/sc8280xp.conf         我们的 DMI 分发器（已验证；加 Q8B 分支，去 X13s 的 False.Error）
+#   Qualcomm/sc8280xp/Radxa-Dragon-Q8B.conf Radxa 官方版（BootSequence + include wcd/rxm init）
+#   Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf  Radxa 官方版 + 我们标注的 DSP 每流增益 delta
+#   codecs/wcd938x/*                        WCD938x codec 序列（含 Radxa 新增 HeadphoneABEnableSeq，wcd9385 必需）
+#   codecs/qcom-lpass/{rx,tx}-macro/*       LPASS macro 序列
+# 来源：Radxa 的 alsa-ucm-conf fork（radxa-pkg/alsa-ucm-conf 1.2.16.1-radxa-1）。
+#   **关键**：Radxa 的 Dragon-Q8B-HiFi.conf 里 Headphones 是**完整 WCD938x 通路**
+#   （codec class CLS_AB_HIFI + rx-macro 序列），我们旧的手写 UCM 只是空壳
+#   （没有 EnableSequence/codec）→ 裸 `aplay -D hw:0,0` 必然 EIO。见 devlog/2026-10-10-01。
+log "安装 Q8B ALSA UCM（Radxa 的 Q8B UCM 树 + 我们的 DMI 分发器）"
+UCM_DIR="$R/usr/share/alsa/ucm2"
+UCM_SRC="$SCRIPT_DIR/ucm"
+install -d -m0755 "$UCM_DIR/Qualcomm/sc8280xp" \
+                 "$UCM_DIR/codecs/wcd938x" \
+                 "$UCM_DIR/codecs/qcom-lpass/rx-macro" \
+                 "$UCM_DIR/codecs/qcom-lpass/tx-macro"
+# 显式清单（可审阅；install 保证 root:root 0644，不把构建机的属主/mtime 带进镜像）。
+while read -r _rel; do
+  [[ -n "$_rel" ]] || continue
+  install -m0644 -o root -g root "$UCM_SRC/$_rel" "$UCM_DIR/$_rel"
+done <<'UCM_FILES'
+Qualcomm/sc8280xp/sc8280xp.conf
+Qualcomm/sc8280xp/Radxa-Dragon-Q8B.conf
+Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf
+codecs/wcd938x/HeadphoneABEnableSeq.conf
+codecs/wcd938x/HeadphoneDisableSeq.conf
+codecs/wcd938x/HeadphoneMicEnableSeq.conf
+codecs/wcd938x/HeadphoneMicDisableSeq.conf
+codecs/qcom-lpass/rx-macro/HeadphoneEnableSeq.conf
+codecs/qcom-lpass/rx-macro/HeadphoneDisableSeq.conf
+codecs/qcom-lpass/rx-macro/init.conf
+codecs/qcom-lpass/tx-macro/HeadphoneMicEnableSeq.conf
+codecs/qcom-lpass/tx-macro/HeadphoneMicDisableSeq.conf
+UCM_FILES
+unset _rel
+# 清掉历史文件名（旧版 overlay 落过 HiFi-Dragon-Q8B.conf），避免残留误导。
+rm -f "$UCM_DIR/Qualcomm/sc8280xp/HiFi-Dragon-Q8B.conf"
 
 # ── 12) 去 SteamOS 的 VR/麦克风 WirePlumber 组件（本板无 VR、无可用麦克风，且会 SEGV）──
 # 真机 2026-10-03 实测：一旦 UCM 生效、声卡产生真实节点，WirePlumber 立刻 SEGV 重启循环：
@@ -472,23 +499,41 @@ unset _sh
 [[ "$(readlink "$R/etc/systemd/system/sysinit.target.wants/steamos-growroot.service")" == "/etc/systemd/system/steamos-growroot.service" ]] \
   && echo "  OK   steamos-growroot.service 已启用" \
   || { echo "  BAD  growroot 服务未启用（首启不会扩根）"; ok=0; }
-# 音频 UCM：三份文件齐 + sc8280xp.conf 含 Q8B 分支 + 无 X13s 的 False.Error
-for _f in sc8280xp.conf Radxa-Dragon-Q8B.conf HiFi-Dragon-Q8B.conf; do
+# 音频 UCM：Radxa 的 Q8B UCM 树落齐（Qualcomm/sc8280xp + codecs）
+for _f in Qualcomm/sc8280xp/sc8280xp.conf \
+          Qualcomm/sc8280xp/Radxa-Dragon-Q8B.conf \
+          Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf \
+          codecs/wcd938x/HeadphoneABEnableSeq.conf \
+          codecs/qcom-lpass/rx-macro/HeadphoneEnableSeq.conf \
+          codecs/qcom-lpass/tx-macro/HeadphoneMicEnableSeq.conf; do
   [[ -f "$UCM_DIR/$_f" ]] && echo "  OK   UCM $_f" || { echo "  BAD  缺 UCM $_f"; ok=0; }
 done
 unset _f
-if grep -q 'If.RadxaQ8B' "$UCM_DIR/sc8280xp.conf" && ! grep -qE '^[[:space:]]*False\.Error' "$UCM_DIR/sc8280xp.conf"; then
+if grep -q 'If.RadxaQ8B' "$UCM_DIR/Qualcomm/sc8280xp/sc8280xp.conf" \
+   && ! grep -qE '^[[:space:]]*False\.Error' "$UCM_DIR/Qualcomm/sc8280xp/sc8280xp.conf"; then
   echo "  OK   UCM sc8280xp.conf 有 RadxaQ8B 分支且无 False.Error"
 else
   echo "  BAD  UCM sc8280xp.conf 分支/False.Error 不对（未知机型会 abort）"; ok=0
 fi
-[[ -f "$UCM_DIR/HiFi-Dragon-Q8B.conf" ]] && grep -q 'stream2.vol_ctrl2 MultiMedia3 Playback Volu' "$UCM_DIR/HiFi-Dragon-Q8B.conf" \
+# 3.5mm：WCD938x 耳机通路必须完整（codec class + 被 HiFi 引用），否则耳机 EIO
+grep -q 'CLS_AB_HIFI' "$UCM_DIR/codecs/wcd938x/HeadphoneABEnableSeq.conf" \
+  && echo "  OK   WCD938x HeadphoneABEnableSeq 用 CLS_AB_HIFI（wcd9385 必需）" \
+  || { echo "  BAD  HeadphoneABEnableSeq 缺 CLS_AB_HIFI（耳机不响/失真）"; ok=0; }
+if grep -q 'SectionDevice."Headphones"' "$UCM_DIR/Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf" \
+   && grep -q 'HeadphoneABEnableSeq.conf' "$UCM_DIR/Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf" \
+   && grep -q 'rx-macro/HeadphoneEnableSeq.conf' "$UCM_DIR/Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf"; then
+  echo "  OK   Headphones 设备接 WCD938x codec + rx-macro 序列"
+else
+  echo "  BAD  Headphones 设备缺 codec/macro 序列（3.5mm 不会响）"; ok=0
+fi
+# 本地 delta：DSP 每流增益（Radxa 原文件没有，devlog/2026-10-03-27）
+grep -q 'stream2.vol_ctrl2 MultiMedia3 Playback Volu' "$UCM_DIR/Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf" \
   && echo "  OK   UCM 含 DSP 每流增益 cset（否则游戏音量很小）" \
   || { echo "  BAD  UCM 缺 streamN.vol_ctrlN cset"; ok=0; }
 # 每个 DP 设备都要有 JackControl，否则端口 availability=unknown，
 # 默认 sink 被钉在 PlaybackPriority 最高那口 —— 显示器插在别的口就没声。
 for _j in DP0 DP1 DP2; do
-  grep -q "JackControl \"${_j} Jack\"" "$UCM_DIR/HiFi-Dragon-Q8B.conf" \
+  grep -q "JackControl \"${_j} Jack\"" "$UCM_DIR/Qualcomm/sc8280xp/Dragon-Q8B-HiFi.conf" \
     && echo "  OK   UCM ${_j} 已接 JackControl（端口随插拔自动切换）" \
     || { echo "  BAD  UCM ${_j} 缺 JackControl（换口后无声）"; ok=0; }
 done

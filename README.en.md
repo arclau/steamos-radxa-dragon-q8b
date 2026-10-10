@@ -20,7 +20,7 @@ x86 games run through FEX + ARM64 Proton translation.
 |---|---|---|
 | 1 | Boot from UFS / NVMe into SteamOS Game Mode | ✅ Verified (onboard UFS) |
 | 2 | `vulkaninfo` reports Adreno 690, games render via Vulkan | ✅ *Stardew Valley* playable on real hardware |
-| 3 | Audio (3.5 mm + HDMI/DP) | ⚠️ HDMI/DP ✅; **3.5 mm ❌** (WCD938x EIO, stuck on ADSP firmware) |
+| 3 | Audio (3.5 mm + HDMI/DP) | ✅ HDMI/DP ✅ + **3.5 mm headphone ✅** (Radxa official Q8B UCM, closed 2026-10-10) |
 | 4 | Wired networking (2× 2.5GbE) and Wi-Fi/BT | ✅ All verified |
 | 5 | External gamepad recognized as a Steam input device | ✅ Both USB and BT verified (USB has a "plugged in before boot → no input" gotcha; replug fixes it) |
 | 6 | Reproducible deployment from a full-disk image | ✅ Verified |
@@ -66,11 +66,13 @@ x86 games run through FEX + ARM64 Proton translation.
   work, with dual DP hot-plugging supported.
 
 ### Audio
-- Hand-written **ALSA UCM** (Q8B profiles, 3 files) + **AudioReach topology**, fixing
-  the total silence caused by stock UCM only recognizing the X13s.
+- **ALSA UCM**: adopts Radxa's official Q8B UCM (`radxa-pkg/alsa-ucm-conf` fork, full
+  WCD938x headphone path with `CLS_AB_HIFI`) plus our verified DMI dispatcher, with
+  **AudioReach topology** fixing the total silence caused by stock UCM only recognizing the X13s.
 - HDMI/DP output works, and the **default sink follows the active display port**
   (each of the three DP devices is bound to its own `JackControl`).
-- 3.5 mm headphone / mic are not working yet (WCD938x EIO, ADSP rejects `GRAPH_START`).
+- **3.5 mm headphone works** (2026-10-10): plugging in sets `Headphone Jack=on` → the default
+  sink switches to `HiFi__Headphones__sink` → sound. **Mic input not yet verified.**
 
 ### Networking
 - **Wired**: dual 2.5GbE (Toshiba TC956x PCIe bridge + QCA8081 PHY); after the patch
@@ -108,7 +110,7 @@ x86 games run through FEX + ARM64 Proton translation.
 
 ## Known limitations
 
-- **3.5 mm audio** is not available yet (WCD938x EIO, stuck on ADSP firmware).
+- **3.5 mm mic input** not yet verified (headphone output works as of 2026-10-10).
 - USB gamepads have a "plugged in before boot → no input" gotcha (replug or reset
   fixes it).
 - With **no input device** on the board, Game Mode can only display, not be operated.
@@ -136,9 +138,9 @@ Go to [Releases](../../releases) and download the split `.zst.part*` files for y
 target medium plus `SHA256SUMS`, then merge and decompress:
 
 ```bash
-cat radxa-dragon-q8b_ufs.img.zst.part* > img.zst
+cat steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img.zst.part* > img.zst
 sha256sum -c SHA256SUMS          # verify
-zstd -d img.zst -o radxa-dragon-q8b_ufs.img
+zstd -d img.zst -o steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img
 ```
 
 ### B. Cloud build (fork → run the workflow)
@@ -187,7 +189,7 @@ scripts/build-all.sh                # one shot: kernel→modules→firmware→in
 
 ```bash
 # microSD / NVMe (dd from a host)
-sudo dd if=radxa-dragon-q8b_512.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 # Onboard UFS: a host cannot dd it directly — write on the board, or use EDL
 ```
