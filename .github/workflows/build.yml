@@ -87,7 +87,7 @@ jobs:
       - name: 压缩分卷（<2GiB/卷）
         run: |
           set -euo pipefail
-          IMG="$(ls build/out/radxa-dragon-q8b_*.img | head -1)"
+          IMG="$(ls build/out/steamos-*.img | head -1)"
           echo "IMG=$IMG" >> "$GITHUB_ENV"
           echo "构建产物：$IMG（$(stat -c%s "$IMG") 字节）"
           zstd -19 -T0 -f "$IMG" -o "$IMG.zst"

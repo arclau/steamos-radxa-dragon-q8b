@@ -29,7 +29,10 @@
 # ── 其他环境变量 ────────────────────────────────────────────────────────
 #   ROOTFS        必填。rootfs 的 .tar/.tar.xz/.tar.zst 或目录。
 #   SIZE          镜像大小，默认 10G（与 Radxa 一致）。
-#   OUT           输出镜像路径，默认 build/out/radxa-dragon-q8b_<SECTOR>.img
+#   OUT           输出镜像路径，默认
+#                 build/out/steamos-<VERSION_ID>-radxa-dragon-q8b-<SECTOR>b-<YYYYMMDD>.img
+#   STEAMOS_VERSION  覆盖默认名里的版本段（默认从 $ROOTFS/etc/os-release 的 VERSION_ID 读）。
+#   BUILD_DATE       覆盖默认名里的日期段（默认 date +%Y%m%d）。
 #   IMAGE/DTB/MODULES/FIRMWARE   覆盖默认内核产物路径。
 #   OVERLAY       可选。目录，覆盖到 rootfs 根（SteamOS 阶段放我们的 sc8280xp-overlay）。
 #   INITRD        可选。initrd 文件（steamos/initramfs/build-initramfs.sh 产出）。
@@ -151,7 +154,20 @@ case "$SECTOR" in
   *) die "SECTOR 只能是 4096(UFS) 或 512(NVMe/microSD)，当前=$SECTOR" ;;
 esac
 P1_START=32768; P1_END=65535; P2_START=65536
-[[ -n "$OUT" ]] || OUT="build/out/radxa-dragon-q8b_${SECTOR}.img"
+
+# ─────────────── 默认镜像名：steamos-<ver>-radxa-dragon-q8b-<sector>b-<date>.img ───────────────
+# 版本段优先取 STEAMOS_VERSION；否则从 rootfs 的 os-release 读 VERSION_ID（仅当 ROOTFS 是目录）。
+# 不确定就标 unknown（AGENTS.md §1.5），并提示可用 STEAMOS_VERSION= 覆盖。
+STEAMOS_VERSION="${STEAMOS_VERSION:-}"
+if [[ -z "$STEAMOS_VERSION" && -f "$ROOTFS/etc/os-release" ]]; then
+  STEAMOS_VERSION="$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); print $2; exit}' "$ROOTFS/etc/os-release")"
+fi
+[[ -n "$STEAMOS_VERSION" ]] || {
+  warn "读不到 $ROOTFS/etc/os-release 的 VERSION_ID，镜像名版本段用 'unknown'（可 STEAMOS_VERSION= 覆盖）"
+  STEAMOS_VERSION=unknown
+}
+BUILD_DATE="${BUILD_DATE:-$(date +%Y%m%d)}"
+[[ -n "$OUT" ]] || OUT="build/out/steamos-${STEAMOS_VERSION}-radxa-dragon-q8b-${SECTOR}b-${BUILD_DATE}.img"
 
 # ───────────────────────────── 校验输入 ─────────────────────────────
 [[ -n "$ROOTFS" ]] || die "必须设置 ROOTFS=<rootfs.tar.xz|rootfs目录>"

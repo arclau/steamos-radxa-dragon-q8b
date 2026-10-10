@@ -48,12 +48,17 @@ OUT        ?=
 SIZE       ?=
 ESP_MOUNT  ?=
 WRITE_FSTAB ?=
-IMG        ?= build/out/radxa-dragon-q8b_ufs.img
+IMG        ?= build/out/steamos-$(if $(STEAMOS_VERSION),$(STEAMOS_VERSION),unknown)-radxa-dragon-q8b-$(or $(SECTOR),512)b-$(BUILD_DATE).img
 
 # SteamOS 一条龙（P4/P5）
 STEAMOS_IMG            ?= build/dl/steamos-20260925.6175226/rootfs.img
 STEAMOS_ROOTFS_DIR     ?= build/steamos-rootfs
 STEAMOS_BOOTLOADER_DIR ?= build/steamos-bootloader
+
+# 镜像命名（与 scripts/make-q8b-image.sh 保持一致）：
+#   build/out/steamos-<VERSION_ID>-radxa-dragon-q8b-<SECTOR>b-<YYYYMMDD>.img
+STEAMOS_VERSION ?= $(shell awk -F= '/^VERSION_ID=/{gsub(/"/,"",$$2); print $$2; exit}' $(STEAMOS_ROOTFS_DIR)/etc/os-release 2>/dev/null)
+BUILD_DATE      ?= $(shell date +%Y%m%d)
 
 KMAKE = $(MAKE) -C upstream/radxa-kernel O=$(abspath $(O)) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(JOBS)
 
@@ -178,7 +183,7 @@ steamos-tf: steamos-rootfs
 	$(MAKE) steamos-image ROOTFS="$(STEAMOS_ROOTFS_DIR)" BOOTLOADER="$(STEAMOS_BOOTLOADER_DIR)" TARGET=tf
 
 # ── 发布：压缩 + 分卷（<2GiB/卷，适配 GitHub Release 单文件上限）──────────
-# 用法：make release-image IMG=build/out/radxa-dragon-q8b_ufs.img
+# 用法：make release-image IMG=build/out/steamos-0.5.0-radxa-dragon-q8b-512b-20261009.img
 release-image:
 	@test -f "$(IMG)" || { echo "用法: make release-image IMG=<image>（默认 $(IMG)）"; exit 1; }
 	zstd -19 -T0 -f "$(IMG)" -o "$(IMG).zst"
