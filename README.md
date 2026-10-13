@@ -24,6 +24,12 @@ x86 游戏经 FEX + ARM64 Proton 转译运行。
 | 5 | 外接手柄被识别为 Steam 输入设备 | ✅ USB 与 BT 均已验证（USB 有「开机前插→无输入」坑，重插可解） |
 | 6 | 从整盘镜像可复现部署 | ✅ 已验证 |
 
+## 演示视频
+
+[![B站视频：固件分享 rockq8b steamos 镜像尝鲜版 · 刷机教程 · 游戏实机体验](docs/media/bili-BV1FhpX6GEvG.jpg)](https://www.bilibili.com/video/BV1FhpX6GEvG/)
+
+**▶ [固件分享 rockq8b steamos 镜像尝鲜版 · 刷机教程 · 游戏实机体验](https://www.bilibili.com/video/BV1FhpX6GEvG/)**（Bilibili，3:53）
+
 ## 已实现
 
 ### 内核与设备树

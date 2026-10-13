@@ -25,6 +25,12 @@ x86 games run through FEX + ARM64 Proton translation.
 | 5 | External gamepad recognized as a Steam input device | ✅ Both USB and BT verified (USB has a "plugged in before boot → no input" gotcha; replug fixes it) |
 | 6 | Reproducible deployment from a full-disk image | ✅ Verified |
 
+## Demo video
+
+[![Bilibili video: firmware share, RockQ8B SteamOS image, flashing tutorial, in-game demo](docs/media/bili-BV1FhpX6GEvG.jpg)](https://www.bilibili.com/video/BV1FhpX6GEvG/)
+
+**▶ [Firmware share: RockQ8B SteamOS preview image · flashing tutorial · in-game demo](https://www.bilibili.com/video/BV1FhpX6GEvG/)** (Bilibili, 3:53)
+
 ## What is implemented
 
 ### Kernel and device tree
